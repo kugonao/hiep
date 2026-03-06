@@ -1,0 +1,416 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>vBulletin 4.2 - Readme</title>
+<style>
+body {
+  font-family: Calibri, Tahoma, Geneva, Helvetica, Arial, sans-serif;
+  font-size: 12pt;
+  background-color: #2f4456;
+  color: #FFFFFF;
+}
+
+a:link, a:visited {
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+ul {list-style-image: url(./upload/images/pagination/next-right.png); }
+
+ul li ul {
+  list-style-image: none;
+  list-style-type: disc;
+}
+
+ol {
+  font: italic 1em Georgia, Times, serif;
+  color: #999999;
+}
+
+ol p {
+  font: normal .8em Arial, Helvetica, sans-serif;
+  color: #000000;
+}
+
+hr {
+
+}
+
+.half {
+  width: 50%;
+}
+
+#header {
+  width: 90%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.headlinks {
+  text-align: right;
+}
+
+.headlinks a:link, .headlinks a:visited, .headlinks a:hover  {
+  color: white !important;
+  text-decoration: none;
+}
+#toc span {
+  font-weight: bold;
+  font-size: 14pt;
+}
+
+#toc ul {
+  font-weight: bold;
+}
+
+#toc ul li ul {
+  list-style-type: none;
+}
+
+#toc ul li ul li {
+  margin-left: -20px;
+  line-height: 1.2em;
+  padding: 0;
+}
+
+#toc ul li ul {
+  font-weight: normal;
+}
+
+#content {
+  background-color: #ffffff;
+  color: #000;
+  width: 90%;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 10px;
+  border-radius: 6px;
+  box-shadow: 4px 4px 3px #c8c8c8;
+}
+
+.top {
+  font-size: 9pt;
+  text-transform: uppercase;
+  color: #c8c8c8;
+  text-align: right;
+}
+
+.warning {
+  font-size: 10pt;
+  color: red;
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
+  font-style: italic;
+  font-weight: bold;
+}
+
+.warning:before {
+  content: "Warning: ";
+  font-weight:bold;
+  color: red;
+}
+
+.note {
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
+  font-size: 10pt;
+  color: #2f4456;
+  font-style: italic;
+}
+
+.note:before {
+  content: "Note: ";
+  font-weight: bold;
+  color: #2f4456;
+}
+
+.footer {
+  text-align: center;
+}
+
+.small {
+  font-size: xx-small;
+}
+</style>
+<script language="JavaScript" type="text/javascript" src="upload/clientscript/jquery/jquery-1.6.4.min.js"></script>
+<script language="JavaScript" type="text/javascript">
+/*<![CDATA[*/
+$(document).ready(function() {
+   $("a[href^=http]").each(function(){
+      if(this.href.indexOf(location.hostname) == -1) {
+         $(this).attr({
+            target: "_blank",
+            title: "Opens in a new window"
+         });
+      }
+   })
+});
+/*]]>*/
+</script>
+</head>
+<body>
+<div id="header"><img src="upload/images/misc/vbulletin4_logo.png" width="155" height="55" alt="" />
+<div class="headlinks"><a href="https://members.vbulletin.com">Member's Area</a> &bull; <a href="https://www.vbulletin.com/forum/">Community Forums</a> &bull; <a href="https://www.vbulletin.com/go/techsupport">Technical Support</a> &bull; <a href="https://www.vbulletin.com/docs/html/">Documentation</a></div>
+</div>
+<div id="content">
+<h1>vBulletin 4.2 - Readme</h1>
+<div id="toc"><a name="toc"></a>
+<span>Table of Contents</span>
+<ul>
+    <li><a href="#new">What's New in vBulletin 4.2?</a></li>
+    <li><a href="#install">Installations, Upgrades and Imports</a>
+        <ul>
+            <li><a href="#install.1">Installing a new vBulletin 4 Community</a></li>
+            <li><a href="#upgrade">vBulletin Upgrades</a>
+                <ul>
+                    <li><a href="#upgrade.1">Upgrading from vBulletin 4.x.x</a></li>
+                    <li><a href="#upgrade.2">Upgrading from version vBulletins 3.5.4 through 3.8.7</a></li>
+                    <li><a href="#upgrade.3">Upgrading from older versions of vBulletin</a></li>
+                    <li><a href="#upgradecli">Using the Command Upgrade Tools</a></li>
+                    <li><a href="#upgrade.4">After Your Upgrade</a></li>
+                </ul>
+            </li>
+            <li><a href="#import">Importing into vBulletin</a></li>
+        </ul>
+    </li>
+    <li><a href="#language">Language Support</a></li>
+    <li><a href="#package">vBulletin 4 Download Package Contents</a></li>
+    <li><a href="#moreinfo">Appendix: More information</a></li>
+</ul>
+</div>
+
+<hr>
+<h2><a name="new"></a>What's new in vBulletin 4.2?</h2>
+vBulletin 4.2 includes a variety of new features to make owning and administrating a vBulletin Forum easier and more enjoyable. These features include:
+
+<ul>
+  <li><b>Activity Stream</b> - Up to the minute streams of the content you choose. Supports Articles, Threads, Visitor Messages, Social Groups, Albums and more. Activity Streams show as a main community wide stream that is filterable by the end user so they only see the content they want to see. Activity Streams are also available on the personal profile of users so friends can keep up with the activity of each other quickly and easily. For more information see the <a href="http://tracker.vbulletin.com/browse/VBIV-13946">JIRA entry</a><sup>*</sup>. For the documentation on the Activity Stream, visit the <a href="https://www.vbulletin.com/forum/content.php/737-vbulletin-4-2">vBulletin.com CMS</a>.</li>
+  <li><b>Navigation Manager</b> - Gain full control over your community's navigation bar and tabs. Use the Navigation Manager to create new tabs, links, and sub-menus for your site. This allows you to highlight the parts that are important to your community. Addon Developers can easily tie into the Navigation Manager giving you complete control over the links they provide without always resorting to plugins or editing templates. For more information see the <a href="http://tracker.vbulletin.com/browse/VBIV-8393">JIRA entry</a><sup>*</sup>. For the Documentation on the Navigation Manager see the <a href="https://www.vbulletin.com/forum/content.php/737-vbulletin-4-2">vBulletin.com CMS.</a></li>
+  <li><b>Various Minor Features</b> For more information see the <a href="http://tracker.vbulletin.com/browse/VBIV-14581">JIRA entry</a><sup>*</sup>.
+      <ul>
+          <li>Members who have Visited Today</li>
+          <li>Cron-based Batch Email Sending</li>
+          <li>UserCP Reputation Display</li>
+          <li>Reputation Notification</li>
+          <li>User Profile Reputation Display</li>
+          <li>Who has Read a Thread</li>
+          <li>Doublepost Prevention</li>
+          <li>Enhanced Reputation Checks</li>
+          <li>Reverse Proxy Support (<a href="http://tracker.vbulletin.com/browse/VBIV-10853">JIRA</a><sup>*</sup>)</li>
+      </ul>
+  </li>
+</ul>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr>
+<h2><a name="install"></a>vBulletin4 Installation and Upgrades</h2>
+<div>
+<h3><a name="install.1"></a>Installing a new vBulletin 4 Community</h3>
+<ol>
+  <li><p>Open the 'upload/includes/' folder. In this you will find <b>config.php.new</b>. You need to rename this to <b>config.php</b> and then open it in a text editor.</p><p class="note">We recommend using Wordpad on Windows and TextEdit on OS X.</p></li>
+  <li><p>The config.php file is commented throughout, so you should be able to work out what values to enter for the variables yourself.<br />
+  The values for the config.php file are described in detail <a href="http://www.vbulletin.com/docs/html/editconfig">here</a>.</p></li>
+  <li><p>When you have finished, save the file in the ASCII TEXT file format. Make sure you are not saving in an RTF or UTF8 format.</p></li>
+  <li><p>Using your FTP client upload the entire contents of the 'upload/' folder to your web server. You must upload these files into your 'public_html' or web root directory. If you don't have a public_html directory look for a 'www' directory or ask your hosting provider where you should upload your files.</p><p>You can see a video tutorial on using FileZilla (<a href="http://filezilla-project.org/download.php?type=client">download</a>), a popular FTP client, to <a href="https://www.vbulletin.com/forum/content.php/449-Upload-Files-via-File-Transfer-Protocol-Client-%28FTP%29-Filezilla">upload files</a> on our community site.</p></li>
+  <li><p>When this is done, point your browser at http://www.example.com/<b>install/install.php</b> (where www.example.com/ is the URL of your vBulletin)</p></li>
+  <li><p>The install will ask for your <b>Customer Number</b> to login.</p></li>
+  <li><p>Once you are logged in you can proceed to follow the instructions on the screen. The installation wizard is automated and will only stop when it needs more information from you. If you wish to see what it is doing, click on the details button. This will expand the wizard and show every step as it completes.</p></li>
+  <li><p>When the installation wizard is complete, it will ask if you want to go to the Admin Control Panel. Before proceeding to the Admin Control Panel, you must delete the 'install/install.php'file from your webserver. You may then enter the control panel and start working on your new vBulletin!</p></li>
+  <li><p>The entire installation process should take no more than five minutes after uploading the files.</p></li>
+  <li><p>For a complete description of how to install vBulletin 4, see the <a href="http://www.vbulletin.com/docs/html/install">installation section</a> of the <a href="http://www.vbulletin.com/docs/html">vBulletin Manual</a>.</p></li>
+</ol>
+<p>You can view a video tutorial on the <a href="https://www.vbulletin.com/forum/content.php/789-Ajax-Based-Installation-Video">installation process</a> here on our community site.</p>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<h3><a name="upgrade"></a>vBulletin4 Upgrades</h3>
+<p>Before starting any upgrade to a new version of vBulletin the first step that should be done is to take complete a database backup. You can find more information about backing up here: <a href="http://www.vbulletin.com/docs/html/manual_database_backup">Database Backup</a></p>
+<p>You can view video tutorials on creating database backups here: <a href="https://www.vbulletin.com/forum/content.php/458-Backup-MySQL-Database-via-phpMyAdmin">phpMyAdmin</a>, <a href="https://www.vbulletin.com/forum/content.php/457-Backup-Data-via-Cpanel">cPanel</a>, <a href="https://www.vbulletin.com/forum/content.php/460-Backup-Database-via-SSH-Client-Putty">SSH Command Line</a></p>
+<p>After backing up it may be a good idea to also disable your plugins, especially between major versions of vBulletin. This allows you to test your new upgrade without conflicts from addons. You can do this in a few ways:</p>
+<ul type="disc">
+<li>Disable from the config.php file: define("DISABLE_HOOKS",1);</li>
+<li>Disable from the AdminCP: AdminCP &gt; Settings &gt; Options &gt; Plugin/Hook System</li>
+<li>Disable one by one via the Product Manager: AdminCP &gt; Plugins & Products &gt; Manage Products</li>
+</ul>
+<p class="note">Make sure to backup your includes/config.php file. There is no need to edit this file when doing upgrades unless the Upgrade Script tells you to do so.</p>
+<p>Below you will find the quick step guides for upgrading from each version. For a complete description of how to upgrade from a previous version of vBulletin to the latest version, see the <a href="http://www.vbulletin.com/docs/html/upgrade">upgrade section</a> of the <a href="http://www.vbulletin.com/docs/html">vBulletin Manual</a>.</p>
+
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<div>
+<h4><a name="upgrade.1"></a>Upgrading from vBulletin 4.x.x</h4>
+
+<ol>
+  <li><p>Close your board via the Admin Control Panel.</p></li>
+  <li><p>Delete install/install.php from your upload directory</p></li>
+  <li><p>Upload all remaining files from the 'upload/' folder in the zip.</p></li>
+  <li><p>Open your browser and point the URL to your forums, e.g. http://www.example.com/<b>install/upgrade.php</b> (where www.example.com/ is the URL of your vBulletin). Make sure to upload the files into your previous installation directory as appropriate (e.g. /forums/). The Upgrade Wizard will determine your vBulletin version and jump forward to the appropriate upgrade step. </p>
+  <p class="note">Some steps can take a long time to process. Please be patient.</p></li>
+  <li><p><b>If any errors occur, copy the error and please contact support. DO NOT continue with the upgrade. Doing so may cause irreversible damage to the database.</b></p></li>
+  <li><p>Follow the instructions on the screen. Make sure you proceed until you are redirected to your Admin Control Panel. Here, you can reopen your board.</p></li>
+</ol>
+<p>You can view a video tutorial on the <a href="https://www.vbulletin.com/forum/content.php/426-vBulletin-Upgrading-vBulletin-3-to-vBulletin-4">upgrade process</a> here on our community site. While the video shows an upgrade from vBulletin 3.X to 4.x, it is still applicable for later upgrades as well.</p>
+</div>
+
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<div>
+<h4><a name="upgrade.2"></a>Upgrading from vBulletin versions 3.6.0 through 3.8.7.</h4>
+<div class="warning">When upgrading to vBulletin 4.X from vBulletin 3.X, there are a few incompatibilities that can affect your upgrade and functionality.
+<ul>
+<li>vBulletin 4.x.x uses a new Template and Stylevar engine. This means your previous styles are not compatible with vBulletin 4.x.x. When you upgrade, they will be disabled and a newstyle will be created and set as the default style.</li>
+<li>Any plugins and products you have installed will need to be upgraded as well. Most vBulletin 3.X products are not compatible with vBulletin 4.</li>
+<li>It is recommend that you upgrade a secondary development installation first.</li>
+</ul>
+</div>
+<ol>
+  <li><p>Close your board via the Admin Control Panel.</p></li>
+  <li><p>Delete install/install.php from your upload directory</p></li>
+  <li><p>Upload all remaining files from the 'upload/' folder in the zip.</p></li>
+  <li><p>Open your browser and point the URL to your forums, e.g. http://www.example.com/<b>install/upgrade.php</b> (where www.example.com/ is the URL of your vBulletin). Make sure to upload the files into your previous installation directory as appropriate (e.g. /forums/). The Upgrade Wizard will determine your vBulletin version and jump forward to the appropriate upgrade step. </p>
+  <p class="note">Some steps can take a long time to process. Please be patient.</p></li>
+  <li><p><b>If any errors occur, copy the error and please contact support. DO NOT continue with the upgrade. Doing so may cause irreversible damage to the database.</b></p></li>
+  <li><p>Follow the instructions on the screen. Make sure you proceed until you are redirected to your Admin Control Panel. Here, you can reopen your board.</p></li>
+</ol>
+<p>You can view a video tutorial on the <a href="https://www.vbulletin.com/forum/content.php/426-vBulletin-Upgrading-vBulletin-3-to-vBulletin-4">upgrade process</a> here on our community site.</p>
+</div>
+
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<div>
+<h4><a name="upgrade.3"></a>Upgrading from older versions of vBulletin</h4>
+<p>When upgrading from older versions there are several upgrade scripts that need to be run. These need to be run in a specific order.</p>
+<p>1.1.x to 2.2.0 -  Those upgrade scripts are available here: <a href="http://members.vbulletin.com/getupgrade.php">http://members.vbulletin.com/getupgrade.php</a><br />
+You need to upload these scripts to the "admin" directory of a vB2 folder. You need to run them manually in sequence: admin/upgrade##.php</p>
+
+<p>2.2.0 to 2.2.9 - These upgrade scripts are included with any vB2 zip file 2.2.9 or greater. You need to run them manually in sequence: admin/upgrade##.php</p>
+
+<p>2.2.9 to 3.6.x - Upload the files for 3.6.x and run the "install/upgrade.php" script. It will automatically take you through all appropriate upgrade scripts up to 3.6.x.</p>
+
+<p>3.6.x up - Upload your vBulletin 4.2.X files and follow the steps at Upgrading from version vBulletins 3.5.4 through 3.8.7.</p>
+
+<p>When the upgrade scripts are complete, the system may tell you to delete some files, and then redirect you to the Admin Control Panel. You should log in to this and proceed to the <i>Maintenance</i> section of the control panel, where you should run the General Update tools. The <i>Rebuild Search Index</i> and <i>Rebuild Statistics</i> will take a quite a long time to run on larger boards.</p>
+
+<p>If you need more assistance in upgrading your older version please create a new thread in the <a href="https://www.vbulletin.com/forum/forumdisplay.php/152-vBulletin-4-Installations-and-Upgrades">vBulletin.com Forums</a><sup>*</sup>.</p>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<div>
+<h4><a name="upgradecli"></a>Using the Command Upgrade Tools</h4>
+<p>Starting with vBulletin 4.0.9, you can run the upgrade script from the command line and remove the overhead of your browser and HTTP calls. The command line interface is designed to specifically help big boards with the upgrade process and to eliminate the time caused by HTTP interaction. you will need to run the upgrade as the user that the webserver runs under. This will prevent permission problems from occurring later if you store CSS as files. To run this interface go to your install directory and execute:</p>
+<pre>sudo -u &lt;user&gt; php -f upgrade.php</pre>
+<p>You can view a video tutorial on <a href="https://www.vbulletin.com/forum/content.php/432-Easy-Upgrade-to-vBulletin-4-1-Using-Command-Line">command line upgrades</a> on our community site.</p>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<div>
+<h4><a name="upgrade.4"></a>After Your Upgrade</h4>
+<p>After the upgrade of your vBulletin System, there may be additional steps that need to be completed in your Admin Control Panel. These will be listed as News Items and have links to address them. These steps may require updating counters, rebuilding indexes and so forth. Please make sure to follow the instructions on the screen carefully and process all steps listed on your Admin Control Panel home page.</p>
+<h5>Out of Date Templates</h5>
+<p>Out of date templates occur when you have customized your vBulletin Templates to apply HTML effects to the page or modify functionality. When you perform the upgrade, vBulletin will import a new version of the default templates. The system will then attempt to merge any changes into your customized templates. Most of the time the merge is successful. However occasionally, the merge will fail due to conflicts. When this happens your customized template will be listed as out of date as a warning to you. You will need to compare your custom template with the new default and manually apply any necessary changes. For more information about this process please see our article on <a href="https://www.vbulletin.com/forum/content.php/757-vB-4-0-Template-Merging-and-3-Way-Comparison">Template Merging and 3-Way Comparison.</a></p>
+<h5>Out of Date Phrases</h5>
+<p>There are times when phrasing needs to be updated to fix errors, grammar or wording. When this happens it can result in customized phrases becoming out of date. To resolve this, you would need to use the Find Out of Date Phrases tool to compare your customized phrases with the new ones. Most of the time, you'll be able to continue using your customized phrases. However if they result in an error or bug, you should revert them and recustomize them from the beginning. For more information on Out of Date phrase see the <a href="https://www.vbulletin.com/docs/html/upgrade_revert_phrases">vBulletin Manual</a>.</p>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr class="half">
+<h2><a name="import"></a>Importing into vBulletin (ImpEx)</h2>
+<p>vBulletin Solutions provides a series of import modules called ImpEx. These modules will allow you to import a variety of other systems into your new vBulletin Community. Please read the documentation completely before attempting an import.</p>
+<div class="warning">ImpEx is not an upgrade system and use of it in this manner is not supported. If you use ImpEx to attempt an upgrade of your community, you can cause irreparable harm to your links, content ids and more within the vBulletin system.</div>
+<p>Here is the Online Manual for the Impex system: <a href="https://www.vbulletin.com/docs/html/impex">https://www.vbulletin.com/docs/html/impex</a></p>
+<p>Make sure to view the 'After the Import' instructions here: <a href="https://www.vbulletin.com/docs/html/impex_cleanup">https://www.vbulletin.com/docs/html/impex_cleanup</a></p>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr>
+<div>
+<h2><a name="language"></a>Language Support</h2>
+<p>vBulletin includes a Language Manager in the admin control panel. This allows you to translate the vBulletin interface into your own language or several languages, as well as being able to import language packs created others. Your users can then select the language they prefer to view the board in. We do have a Languages & Phrases forum where you can find packs donated by our customers and also receive help for creating your own: <a href="http://www.vbulletin.com/forum/forumdisplay.php?f=87">http://www.vbulletin.com/forum/forumdisplay.php?f=87</a><sup>*</sup></p>
+<p>Also, here's the forum containing downloads of the current Language Packs made available by our customers: <a href="http://www.vbulletin.com/forum/forumdisplay.php?f=96">http://www.vbulletin.com/forum/forumdisplay.php?f=96</a><sup>*</sup></p>
+<p>Please note, the Language Management System only covers the board text and not individual posts.  The posts themselves will be displayed in the original language they were written in.</p>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr>
+<div>
+<h2><a name="package"></a>vBulletin 4 Download Package Contents </h2>
+<p>When you uncompress your vBulletin download you will see a variety of files and directories. Here is a description of these contents.</p>
+<dl>
+    <dt><b>do_not_upload/</b></dt>
+    <dd>This folder contains administration files.
+    The files located in this directory are used for advanced installation instructions and support functions. Only use these files if directed to do so by a support technician, or if you know what you're doing.
+    <ul>
+        <li>blog - This directory contains cms component files that are used when you want to run the vBulletin Blog within a subdirectory.</li>
+        <li>cms - This directory contains the cms component files that are used when you want to run the vBulletin CMS within a subdirectory.</li>
+        <li>forum - This directory contains forum component files that are used when you want to run the vBulletin Forum within a subdirectory.</li>
+        <li>rewrite - This directory contains the rewrite instructions for the mod_rewrite friendly urls. It has subdirectories for Apache2 and IIS 7+ as well as additional subdirectories if you installed your components in a subdirectory.</li>
+        <li>tools.php - A script to help you fix (login) problems and rebuild caches for usergroups, bitfields, etc. Do not upload this to the server unless you need to use it.</li>
+        <li>searchshell.php - a php shell script to rebuild the search index from the console. This is quicker than the web mode in the Admin CP and useful for large forum upgrades.</li>
+        <li>vb_backup.sh - a bash shell script to backup the database, especially handy for nightly backups when set up as a crontab or scheduled task.</li>
+    </ul>
+    </dd>
+    <dt><b>upload/</b></dt>
+    <dd>This folder contains all the files from the vBulletin forum software that you need to upload when installing or upgrading. All the files inside this folder are required to run vBulletin, see the below installation and/or upgrade instructions on which files to modify and/or to delete after an installation or upgrade.</br>
+    While there are too many files to list, here is a brief overview of the main folders in this directory.
+    <ul>
+        <li>admincp - Contains the main entry point to the Admin Control Panel.</li>
+        <li>archive - A pseudo-archive for search engines that don't work with dynamic pages.</li>
+        <li>clientscript - Contains the Javascript and extra CSS needed for the vBulletin engine.</li>
+        <li>customavatars - Ships empty but provides a location for the storage of custom avatars. Use depends on your settings in the software.</li>
+        <li>customgroupicons - Ships empty but provides a location for the storage of custom social group icons. Use depends on your settings in the software.</li>
+        <li>customprofilepics - Ships empty but provides a location for the storage of custom profile images. Use depends on your settings in the software.</li>
+        <li>forumrunner - Contains the files necessary for the Forum Runner mobile apps to function properly.</li>
+        <li>images - contains all the images that the default vBulletin style needs to work properly.</li>
+        <li>includes - Contains the different PHP and XML files required for the vBulletin engine to work properly. Also contains the majority of the vBulletin API.</li>
+        <li>install - Contains the installation and upgrade wizards as well as the default style, language and settings for the software.</li>
+        <li>modcp - The moderation control panel. A light version of the Admin CP that gives moderators access to basic functions they need. Most functions are also duplicated via inline moderation tools in the software.</li>
+        <li>packages - Many different base classes that the vBulletin engine uses to know how to interact with different content types and functionality.</li>
+        <li>signaturepics - Ships empty but provides a location for the storage of custom signature images. Use depends on your settings in the software.</li>
+        <li>vb - The vBulletin Engine. Contains the classes and software necessary for the engine to work. The files here work in conjunction with the includes and packages directory to do the bulk of the processing in vBulletin.</li>
+    </ul>
+    </dd>
+
+<dt><b>license_agreement.html</b></dt>
+<dd>All customers must agree to this license agreement prior to downloading and using the vBulletin software, <a href="license_agreement.html">read it.</a></dd>
+<dt><b>vb4_readme.html</b></dt>
+<dd>HTML version of this installation/upgrade/information file</dd>
+<dt><b>vbulletin-smilies.pdf</b></dt>
+<dd>A PDF file of the smilies currently shipping with the system.</dd>
+</dl>
+</div>
+
+<div class="top"><a href="#toc">Top</a></div>
+<hr>
+<div>
+<h2><a name="moreinfo"></a>Appendix: More information </h2>
+<p>Here are some important links with more information: </p>
+<ul type="disc">
+<li><b><a href="http://www.vBulletin.com/docs/html/">The vBulletin Online Manual</a></b> - With installation and upgrade instructions, indepth feature and options information and more technical documents. </li>
+<li><b><a href="http://members.vBulletin.com/">The vBulletin Members Area</a><sup>^</sup></b> - Download area for vBulletin, private customer support tickets area, etc. </li>
+<li><b><a href="http://www.vBulletin.com/forum/">The vBulletin Support Forums</a><sup>*</sup></b> - Free priority support forums, latest announcements with indepth release details, etc. </li>
+<li><b><a href="https://members.vbulletin.com/changelog.php">vBulletin Release Changelog</a><sup>^</sup></b> - The changelog links to the release announcement for every version of vBulletin. Release announcements contain specific information about that release including updated files, updated templates, links to bug fix lists and more.</li>
+<li><b><a href="http://tracker.vbulletin.com/browse/VBIV#selectedTab=com.atlassian.jira.plugin.system.project%3Achangelog-panel">vBulletin JIRA Changelog</a><sup>*</sup></b> - Similar to the above but a concise list of bugs, enhancements and other issues applied to vBulletin 4 by version.</li>
+</ul>
+</div>
+</div>
+<div class="footer">
+<p align="center">Copyright &#169; 2000 &#8211; 2012 vBulletin
+Solutions, Inc. All rights reserved.</p>
+</div>
+<div class="small">
+<p>* Registration and a valid license are required to participate in the vBulletin Community Forums and JIRA. ^ Access to the Member's Area requires a valid Customer Number and password.</p>
+</div>
+
+</body>
+</html>
+
