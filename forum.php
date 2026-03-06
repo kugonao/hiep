@@ -10,815 +10,826 @@
 || #################################################################### ||
 \*======================================================================*/
 
-// ####################### SET PHP ENVIRONMENT ###########################
+// ######################## SET PHP ENVIRONMENT ###########################
 error_reporting(E_ALL & ~E_NOTICE);
+@set_time_limit(0);
 
-// #################### DEFINE IMPORTANT CONSTANTS #######################
-define('THIS_SCRIPT', 'index');
-define('CSRF_PROTECTION', true);
-define('CSRF_SKIP_LIST', '');
-define('VB_ENTRY', 'forum.php');
+// ##################### DEFINE IMPORTANT CONSTANTS #######################
+define('CVS_REVISION', '$RCSfile$ - $Revision: 92140 $');
 
-// ################### PRE-CACHE TEMPLATES AND DATA ######################
-// get special phrase groups
-$phrasegroups = array(
-	'activitystream',
-	'holiday'
-);
+// #################### PRE-CACHE TEMPLATES AND DATA ######################
+$phrasegroups = array('forum', 'cpuser', 'forumdisplay', 'prefix');
+$specialtemplates = array();
 
-// get special data templates from the datastore
-$specialtemplates = array(
-	'userstats',
-	'birthdaycache',
-	'maxloggedin',
-	'iconcache',
-	'eventcache',
-	'mailqueue',
-	'activeblocks',
-);
-
-// pre-cache templates used by all actions
-$globaltemplates = array(
-	'ad_board_after_forums',
-	'ad_board_below_whats_going_on',
-	'block_activitystream',
-	'block_blogentries',
-	'block_cmsarticles',
-	'block_newposts',
-	'block_sgdiscussions',
-	'block_tagcloud',
-	'block_threads',
-	'block_html',
-	'FORUMHOME',
-	'forumhome_event',
-	'forumhome_subforums',
-	'forumhome_forumbit_level1_nopost',
-	'forumhome_forumbit_level1_post',
-	'forumhome_forumbit_level2_nopost',
-	'forumhome_forumbit_level2_post',
-	'forumhome_lastpostby',
-	'tag_cloud_link',
-);
-
-// pre-cache templates used by specific actions
-$actiontemplates = array();
-
-// ######################### REQUIRE BACK-END ############################
+// ########################## REQUIRE BACK-END ############################
 require_once('./global.php');
+require_once(DIR . '/includes/adminfunctions_template.php');
+require_once(DIR . '/includes/adminfunctions_forums.php');
+require_once(DIR . '/includes/adminfunctions_prefix.php');
 
-// Redirect if required
-if (VB_REDIRECT === true)
+// ######################## CHECK ADMIN PERMISSIONS #######################
+if (!can_administer('canadminforums'))
 {
-	$tabid = get_navigation_default(build_navigation_list(), false);
-
-	if ($url = get_navigation_url($tabid))
-	{
-		exec_header_redirect($url);
-	}
+	print_cp_no_permission();
 }
 
-require_once(DIR . '/includes/functions_bigthree.php');
-require_once(DIR . '/includes/functions_forumlist.php');
+// ############################# LOG ACTION ###############################
 
-// #######################################################################
-// ######################## START MAIN SCRIPT ############################
-// #######################################################################
 
-verify_forum_url($vbulletin->options['forumhome']);
+$vbulletin->input->clean_array_gpc('r', array(
+	'moderatorid' 	=> TYPE_UINT,
+	'forumid'		=> TYPE_UINT
+));
 
-($hook = vBulletinHook::fetch_hook('forumhome_start')) ? eval($hook) : false;
+log_admin_action(iif($vbulletin->GPC['moderatorid'] != 0, " moderator id = " . $vbulletin->GPC['moderatorid'],
+						iif($vbulletin->GPC['forumid'] != 0, "forum id = " . $vbulletin->GPC['forumid'])));
 
-// get permissions to view forumhome
-if (!($permissions['forumpermissions'] & $vbulletin->bf_ugp_forumpermissions['canview']))
+// ########################################################################
+// ######################### START MAIN SCRIPT ############################
+// ########################################################################
+
+print_cp_header($vbphrase['forum_manager']);
+
+if (empty($_REQUEST['do']))
 {
-	print_no_permission();
+	$_REQUEST['do'] = 'modify';
 }
 
-$navbits = array();
+($hook = vBulletinHook::fetch_hook('forumadmin_start')) ? eval($hook) : false;
 
-if (empty($foruminfo['forumid']))
+// ###################### Start add #######################
+if ($_REQUEST['do'] == 'add' OR $_REQUEST['do'] == 'edit')
 {
-	// show all forums
-	$forumid = -1;
+	$vbulletin->input->clean_array_gpc('r', array(
+		'forumid'			=> TYPE_UINT,
+		'defaultforumid'	=> TYPE_UINT,
+		'parentid'			=> TYPE_UINT
+	));
 
-	$navbits[''] = $vbphrase['forum'];
-}
-else
-{
-	// check forum permissions
-	$_permsgetter_ = 'index';
-	$forumperms = fetch_permissions($foruminfo['forumid']);
-
-	if (!($forumperms & $vbulletin->bf_ugp_forumpermissions['canview']))
+	if ($_REQUEST['do'] == 'add')
 	{
-		print_no_permission();
-	}
+		// get a list of other usergroups to base this one off of
+		print_form_header('forum', 'add');
+		print_description_row(construct_table_help_button('defaultforumid') . '<b>' . $vbphrase['create_forum_based_off_of_forum'] . '</b> <select name="defaultforumid" tabindex="1" class="bginput">' . construct_forum_chooser() . '</select> <input type="submit" class="button" value="' . $vbphrase['go'] . '" tabindex="1" />', 0, 2, 'tfoot', 'center');
+		print_table_footer();
+		// Set Defaults;
+		$forum = array(
+			'title' => '',
+			'description' => '',
+			'link' => '',
+			'displayorder' => 1,
+			'daysprune' => -1,
+			'parentid' => $vbulletin->GPC['parentid'],
+			'showprivate' => 0,
+			'newthreademail' => '',
+			'newpostemail' => '',
+			'moderatenewpost' => 0,
+			'moderatenewthread' => 0,
+			'moderateattach' => 0,
+			'styleid' => '',
+			'styleoverride' => 0,
+			'password' => '',
+			'canhavepassword' => 1,
+			'cancontainthreads' => 1,
+			'active' => 1,
+			'allowposting' => 1,
+			'indexposts' => 1,
+			'bypassdp' => 0,
+			'displaywrt' => 1,
+			'canreputation' => 1,
+			'allowhtml' => 0,
+			'allowbbcode' => 1,
+			'allowimages' => 1,
+			'allowvideos'  => 1,
+			'allowsmilies' => 1,
+			'allowicons' => 1,
+			'allowratings' => 1,
+			'countposts' => 1,
+			'showonforumjump' => 1,
+			'defaultsortfield' => 'lastpost',
+			'defaultsortorder' => 'desc',
+   			'imageprefix' => '',
+   			'prefixrequired' => 0
+		);
 
-	// check if there is a forum password and if so, ensure the user has it set
-	verify_forum_password($foruminfo['forumid'], $foruminfo['password']);
+		if (!empty($vbulletin->GPC['defaultforumid']))
+		{
+			$newforum = fetch_foruminfo($vbulletin->GPC['defaultforumid']);
+			foreach (array_keys($forum) AS $title)
+			{
+				$forum["$title"] = $newforum["$title"];
+			}
+		}
 
-	// draw nav bar
-	$navbits[fetch_seo_url('forumhome', array())] = $vbphrase['forum'];
-	$parentlist = array_reverse(explode(',', substr($foruminfo['parentlist'], 0, -3)));
-	foreach ($parentlist AS $forumID)
-	{
-		$forumTitle =& $vbulletin->forumcache["$forumID"]['title'];
-		$navbits[fetch_seo_url('forum', array('forumid' => $forumID, 'title' => $forumTitle))] = $forumTitle;
-	}
+		($hook = vBulletinHook::fetch_hook('forumadmin_add_default')) ? eval($hook) : false;
 
-	// pop the last element off the end of the $nav array so that we can show it without a link
-	array_pop($navbits);
-
-	$navbits[''] = $foruminfo['title'];
-}
-
-$today = vbdate('Y-m-d', TIMENOW, false, false);
-
-// ### TODAY'S BIRTHDAYS #################################################
-$birthdays = array();
-$show['birthdays'] = false;
-if ($vbulletin->options['showbirthdays'])
-{
-	if (!is_array($vbulletin->birthdaycache)
-		OR ($today != $vbulletin->birthdaycache['day1'] AND $today != $vbulletin->birthdaycache['day2'])
-		OR !is_array($vbulletin->birthdaycache['users1'])
-	)
-	{
-		// Need to update!
-		require_once(DIR . '/includes/functions_databuild.php');
-		$birthdaystore = build_birthdays();
-		DEVDEBUG('Updated Birthdays');
+		print_form_header('forum', 'update');
+		print_table_header($vbphrase['add_new_forum']);
 	}
 	else
 	{
-		$birthdaystore = $vbulletin->birthdaycache;
+		if (!($forum = fetch_foruminfo($vbulletin->GPC['forumid'], false)))
+		{
+			print_stop_message('invalid_forum_specified');
+		}
+		print_form_header('forum', 'update');
+		print_table_header(construct_phrase($vbphrase['x_y_id_z'], $vbphrase['forum'], $forum['title'], $forum['forumid']));
+		construct_hidden_code('forumid', $vbulletin->GPC['forumid']);
 	}
 
-	switch ($today)
+	$forum['title'] = str_replace('&amp;', '&', $forum['title']);
+	$forum['description'] = str_replace('&amp;', '&', $forum['description']);
+
+	print_input_row($vbphrase['title'], 'forum[title]', $forum['title']);
+	print_textarea_row($vbphrase['description'], 'forum[description]', $forum['description']);
+	print_input_row($vbphrase['forum_link'], 'forum[link]', $forum['link']);
+	print_input_row("$vbphrase[display_order]<dfn>$vbphrase[zero_equals_no_display]</dfn>", 'forum[displayorder]', $forum['displayorder']);
+	//print_input_row($vbphrase['default_view_age'], 'forum[daysprune]', $forum['daysprune']);
+
+	if ($vbulletin->GPC['forumid'] != -1)
 	{
-		case $birthdaystore['day1']:
-			$birthdaysarray = $birthdaystore['users1'];
-			break;
-
-		case $birthdaystore['day2']:
-			$birthdaysarray = $birthdaystore['users2'];
-			break;
-
-		default:
-			$birthdaysarray = array();
-	}
-	// memory saving
-	unset($birthdaystore);
-
-	$clc = 0;
-	foreach ($birthdaysarray AS $birthday)
-	{
-		$clc++;
-		$show['birthdays'] = true;
-		$birthday['comma'] = $vbphrase['comma_space'];
-		$birthdays[$clc] = $birthday;
-	}
-
-	// Last element
-	if ($clc)
-	{
-		$birthdays[$clc]['comma'] = '';
-	}
-}
-
-// ### TODAY'S EVENTS #################################################
-if ($vbulletin->options['showevents'])
-{
-	require_once(DIR . '/includes/functions_calendar.php');
-
-	$future = gmdate('n-j-Y' , TIMENOW + 86400 + 86400 * $vbulletin->options['showevents']);
-
-	if (!is_array($vbulletin->eventcache) OR $future != $vbulletin->eventcache['date'])
-	{
-		// Need to update!
-		$eventstore = build_events();
-		DEVDEBUG('Updated Events');
+		print_forum_chooser($vbphrase['parent_forum'], 'forum[parentid]', $forum['parentid'], $vbphrase['no_one']);
 	}
 	else
 	{
-		$eventstore = $vbulletin->eventcache;
+		construct_hidden_code('parentid', 0);
 	}
 
-	unset($eventstore['date']);
-	$events = array();
-	$eventcount = 0;
-	$holiday_calendarid = 0;
+	// make array for daysprune menu
+	$pruneoptions = array(
+		'1' => $vbphrase['show_threads_from_last_day'],
+		'2' => construct_phrase($vbphrase['show_threads_from_last_x_days'], 2),
+		'7' => $vbphrase['show_threads_from_last_week'],
+		'10' => construct_phrase($vbphrase['show_threads_from_last_x_days'], 10),
+		'14' => construct_phrase($vbphrase['show_threads_from_last_x_weeks'], 2),
+		'30' => $vbphrase['show_threads_from_last_month'],
+		'45' => construct_phrase($vbphrase['show_threads_from_last_x_days'], 45),
+		'60' => construct_phrase($vbphrase['show_threads_from_last_x_months'], 2),
+		'75' => construct_phrase($vbphrase['show_threads_from_last_x_days'], 75),
+		'100' => construct_phrase($vbphrase['show_threads_from_last_x_days'], 100),
+		'365' => $vbphrase['show_threads_from_last_year'],
+		'-1' => $vbphrase['show_all_threads']
+	);
 
-	foreach ($eventstore AS $eventid => $eventinfo)
+	print_select_row($vbphrase['default_view_age'], 'forum[daysprune]', $pruneoptions, $forum['daysprune']);
+
+	$sort_fields = array(
+		'title'        => $vbphrase['thread_title'],
+		'lastpost'     => $vbphrase['last_post_time'],
+		'dateline'     => $vbphrase['thread_start_time'],
+		'replycount'   => $vbphrase['number_of_replies'],
+		'views'        => $vbphrase['number_of_views'],
+		'postusername' => $vbphrase['thread_starter'],
+		'voteavg'      => $vbphrase['thread_rating']
+	);
+	print_select_row($vbphrase['default_sort_field'], 'forum[defaultsortfield]', $sort_fields, $forum['defaultsortfield']);
+	print_select_row($vbphrase['default_sort_order'], 'forum[defaultsortorder]', array('asc' => $vbphrase['ascending'], 'desc' => $vbphrase['descending']), $forum['defaultsortorder']);
+
+	print_select_row($vbphrase['show_private_forum'], 'forum[showprivate]', array($vbphrase['use_default'], $vbphrase['no'], $vbphrase['yes_hide_post_counts'], $vbphrase['yes_display_post_counts']), $forum['showprivate']);
+
+
+	print_table_header($vbphrase['moderation_options']);
+
+	print_input_row($vbphrase['emails_to_notify_when_post'], 'forum[newpostemail]', $forum['newpostemail']);
+	print_input_row($vbphrase['emails_to_notify_when_thread'], 'forum[newthreademail]', $forum['newthreademail']);
+
+	print_yes_no_row($vbphrase['moderate_posts'] . ' <dfn>(' . $vbphrase['require_moderator_validation_before_new_posts_are_displayed'] . ')</dfn>', 'forum[options][moderatenewpost]', $forum['moderatenewpost']);
+	print_yes_no_row($vbphrase['moderate_threads'] . ' <dfn>(' . $vbphrase['require_moderator_validation_before_new_threads_are_displayed'] . ')</dfn>', 'forum[options][moderatenewthread]', $forum['moderatenewthread']);
+	print_yes_no_row($vbphrase['moderate_attachments'] . ' <dfn>(' . $vbphrase['require_moderator_validation_before_new_attachments_are_displayed'] . ')</dfn>', 'forum[options][moderateattach]', $forum['moderateattach']);
+
+	print_table_header($vbphrase['style_options']);
+
+	if ($forum['styleid'] == 0)
 	{
-		$offset = intval($eventinfo['dst'] ? $vbulletin->userinfo['timezoneoffset'] : $vbulletin->userinfo['tzoffset']);
-		$eventstore["$eventid"]['dateline_from_user'] = $eventinfo['dateline_from_user'] = $eventinfo['dateline_from'] + $offset * 3600;
-		$eventstore["$eventid"]['dateline_to_user'] = $eventinfo['dateline_to_user'] = $eventinfo['dateline_to'] + $offset * 3600;
-		$gettime = TIMENOW - $vbulletin->options['hourdiff'];
-		$iterations = 0;
-		$todaydate = getdate($gettime);
+		$forum['styleid'] = -1; // to get the "use default style" option selected
+	}
+	print_style_chooser_row('forum[styleid]', $forum['styleid'], $vbphrase['use_default_style'], $vbphrase['custom_forum_style'], true);
+	print_yes_no_row($vbphrase['override_style_choice'], 'forum[options][styleoverride]', $forum['styleoverride']);
+	print_input_row($vbphrase['prefix_for_forum_status_images'], 'forum[imageprefix]', $forum['imageprefix']);
 
-		if (!$eventinfo['singleday'] AND !$eventinfo['recurring'] AND $eventinfo['dateline_from_user'] < gmmktime(0, 0, 0, $todaydate['mon'], $todaydate['mday'], $todaydate['year']))
+	print_table_header($vbphrase['access_options']);
+
+	print_input_row($vbphrase['forum_password'], 'forum[password]', $forum['password']);
+	if ($_REQUEST['do'] == 'edit')
+	{
+		print_yes_no_row($vbphrase['apply_password_to_children'], 'applypwdtochild', 0);
+	}
+	print_yes_no_row($vbphrase['can_have_password'], 'forum[options][canhavepassword]', $forum['canhavepassword']);
+
+	print_table_header($vbphrase['posting_options']);
+
+	print_yes_no_row($vbphrase['act_as_forum'], 'forum[options][cancontainthreads]', $forum['cancontainthreads']);
+	print_yes_no_row($vbphrase['forum_is_active'], 'forum[options][active]', $forum['active']);
+	print_yes_no_row($vbphrase['forum_open'], 'forum[options][allowposting]', $forum['allowposting']);
+	print_yes_no_row($vbphrase['index_new_posts'], 'forum[options][indexposts]' , $forum['indexposts'] );
+	print_yes_no_row($vbphrase['bypass_double_posts'], 'forum[options][bypassdp]' , $forum['bypassdp'] );
+
+	print_table_header($vbphrase['enable_disable_features']);
+
+	print_yes_no_row($vbphrase['allow_html'], 'forum[options][allowhtml]', $forum['allowhtml']);
+	print_yes_no_row($vbphrase['allow_bbcode'], 'forum[options][allowbbcode]', $forum['allowbbcode']);
+	print_yes_no_row($vbphrase['allow_img_code'], 'forum[options][allowimages]', $forum['allowimages']);
+	print_yes_no_row($vbphrase['allow_video_code'], 'forum[options][allowvideos]', $forum['allowvideos']);
+	print_yes_no_row($vbphrase['allow_smilies'], 'forum[options][allowsmilies]', $forum['allowsmilies']);
+	print_yes_no_row($vbphrase['allow_icons'], 'forum[options][allowicons]', $forum['allowicons']);
+	print_yes_no_row($vbphrase['allow_thread_ratings_in_this_forum'], 'forum[options][allowratings]', $forum['allowratings']);
+	print_yes_no_row($vbphrase['count_posts_in_forum'], 'forum[options][countposts]', $forum['countposts']);
+	print_yes_no_row($vbphrase['show_forum_on_forum_jump'], 'forum[options][showonforumjump]', $forum['showonforumjump']);
+
+	$prefixsets = construct_prefixset_checkboxes('prefixset', $vbulletin->GPC['defaultforumid'] ? $vbulletin->GPC['defaultforumid'] : $forum['forumid']);
+	if ($prefixsets)
+	{
+		print_label_row($vbphrase['use_selected_prefix_sets'], $prefixsets, '', 'top', 'prefixset');
+	}
+	print_yes_no_row($vbphrase['require_threads_have_prefix'], 'forum[options][prefixrequired]', $forum['prefixrequired']);
+	print_yes_no_row($vbphrase['display_whoread'], 'forum[options][displaywrt]' , $forum['displaywrt'] );
+	print_yes_no_row($vbphrase['allow_reputation'], 'forum[options][canreputation]' , $forum['canreputation'] );
+
+	($hook = vBulletinHook::fetch_hook('forumadmin_edit_form')) ? eval($hook) : false;
+
+	print_submit_row($vbphrase['save']);
+}
+
+// ###################### Start update #######################
+if ($_POST['do'] == 'update')
+{
+	$vbulletin->input->clean_array_gpc('p', array(
+		'forumid'         => TYPE_UINT,
+		'applypwdtochild' => TYPE_BOOL,
+		'forum'           => TYPE_ARRAY,
+		'prefixset'       => TYPE_ARRAY_NOHTML,
+	));
+
+	$forumdata = datamanager_init('Forum', $vbulletin, ERRTYPE_CP);
+
+	$forum_exists = false;
+	if ($vbulletin->GPC['forumid'])
+	{
+		$forumdata->set_existing($vbulletin->forumcache[$vbulletin->GPC['forumid']]);
+		$forumdata->set_info('applypwdtochild', $vbulletin->GPC['applypwdtochild']);
+
+		$forum_exists = true;
+	}
+
+	foreach ($vbulletin->GPC['forum'] AS $varname => $value)
+	{
+		if ($varname == 'options')
 		{
-			$sub = -3;
-		}
-		else if (!empty($eventinfo['holidayid']))
-		{
-			$sub = -2;
-		}
-		else if ($eventinfo['singleday'])
-		{
-			$sub = -1;
+			foreach ($value AS $key => $val)
+			{
+				$forumdata->set_bitfield('options', $key, $val);
+			}
 		}
 		else
 		{
-			$sub = $eventinfo['dateline_from_user'] - (86400 * (intval($eventinfo['dateline_from_user'] / 86400)));
+			$forumdata->set($varname, $value);
+		}
+	}
+
+	($hook = vBulletinHook::fetch_hook('forumadmin_update_save')) ? eval($hook) : false;
+
+	$forumid = $forumdata->save();
+	if (!$vbulletin->GPC['forumid'])
+	{
+		$vbulletin->GPC['forumid'] = $forumid;
+	}
+
+	// find old sets
+	$old_prefixsets = array();
+	if ($forum_exists)
+	{
+		$set_list_sql = $db->query_read("
+			SELECT prefixsetid
+			FROM " . TABLE_PREFIX . "forumprefixset
+			WHERE forumid = " . $vbulletin->GPC['forumid']
+		);
+		while ($set = $db->fetch_array($set_list_sql))
+		{
+			$old_prefixsets[] = $set['prefixsetid'];
+		}
+	}
+
+	// setup prefixes
+	$db->query_write("
+		DELETE FROM " . TABLE_PREFIX . "forumprefixset
+		WHERE forumid = " . $vbulletin->GPC['forumid']
+	);
+
+	$add_prefixsets = array();
+	foreach ($vbulletin->GPC['prefixset'] AS $prefixsetid)
+	{
+		$add_prefixsets[] = '(' . $vbulletin->GPC['forumid'] . ", '" . $db->escape_string($prefixsetid) . "')";
+	}
+
+	if ($add_prefixsets)
+	{
+		$db->query_write("
+			INSERT IGNORE INTO " . TABLE_PREFIX . "forumprefixset
+				(forumid, prefixsetid)
+			VALUES
+				" . implode(',', $add_prefixsets)
+		);
+	}
+
+	$removed_sets = array_diff($old_prefixsets, $vbulletin->GPC['prefixset']);
+	if ($removed_sets)
+	{
+		$removed_sets = array_map(array(&$db, 'escape_string'), $removed_sets);
+
+		$prefixes = array();
+		$prefix_sql = $db->query_read("
+			SELECT prefixid
+			FROM " . TABLE_PREFIX . "prefix
+			WHERE prefixsetid IN ('" . implode("', '", $removed_sets) . "')
+		");
+		while ($prefix = $db->fetch_array($prefix_sql))
+		{
+			$prefixes[] = $prefix['prefixid'];
 		}
 
-		if ($vbulletin->userinfo['calendarpermissions']["$eventinfo[calendarid]"] & $vbulletin->bf_ugp_calendarpermissions['canviewcalendar'] OR ($eventinfo['holidayid'] AND $vbulletin->options['showholidays']))
+		remove_prefixes_forum($prefixes, $vbulletin->GPC['forumid']);
+	}
+
+	require_once(DIR . '/includes/adminfunctions_prefix.php');
+	build_prefix_datastore();
+
+
+	// rebuild ad templates for ads using the 'browsing a forum' criteria
+	$ad_result = $db->query_read("
+		SELECT ad.*
+		FROM " . TABLE_PREFIX . "ad AS ad
+		LEFT JOIN " . TABLE_PREFIX . "adcriteria AS adcriteria ON(adcriteria.adid = ad.adid)
+		WHERE (adcriteria.criteriaid = 'browsing_forum_x' OR adcriteria.criteriaid = 'browsing_forum_x_and_children')
+	");
+	if ($db->num_rows($ad_result) > 0)
+	{
+		$ad_cache = array();
+		$ad_locations = array();
+
+		while ($ad = $db->fetch_array($ad_result))
 		{
-			if ($eventinfo['holidayid'] AND $vbulletin->options['showholidays'])
+			$ad_cache["$ad[adid]"] = $ad;
+			$ad_locations[] = $ad['adlocation'];
+		}
+
+		require_once(DIR . '/includes/functions_ad.php');
+		require_once(DIR . '/includes/adminfunctions_template.php');
+
+		foreach($ad_locations AS $location)
+		{
+			$template = wrap_ad_template(build_ad_template($location), $location);
+
+			$template_un = $template;
+			$template = compile_template($template);
+
+			$db->query_write("
+				UPDATE " . TABLE_PREFIX . "template SET
+					template = '" . $db->escape_string($template) . "',
+					template_un = '" . $db->escape_string($template_un) . "',
+					dateline = " . TIMENOW . ",
+					username = '" . $db->escape_string($vbulletin->userinfo['username']) . "'
+				WHERE
+					title = 'ad_" . $db->escape_string($location) . "'
+					AND styleid IN (-2,-1,0)
+			");
+		}
+
+		build_all_styles(0, 0, '', false, 'standard');
+		build_all_styles(0, 0, '', false, 'mobile');
+	}
+
+	$db->free_result($ad_result);
+
+
+	define('CP_REDIRECT', "forum.php?do=modify&amp;f=" . $vbulletin->GPC['forumid'] . "#forum" . $vbulletin->GPC['forumid']);
+	print_stop_message('saved_forum_x_successfully', $vbulletin->GPC['forum']['title']);
+}
+// ###################### Start Remove #######################
+
+if ($_REQUEST['do'] == 'remove')
+{
+	$vbulletin->input->clean_array_gpc('r', array('forumid' => TYPE_UINT));
+
+	print_delete_confirmation('forum', $vbulletin->GPC['forumid'], 'forum', 'kill', 'forum', 0, $vbphrase['are_you_sure_you_want_to_delete_this_forum'], 'title_clean');
+}
+
+// ###################### Start Kill #######################
+
+if ($_POST['do'] == 'kill')
+{
+	$vbulletin->input->clean_array_gpc('p', array(
+		'forumid' => TYPE_UINT
+	));
+
+	$forumdata = datamanager_init('Forum', $vbulletin, ERRTYPE_CP);
+	$forumdata->set_condition("FIND_IN_SET(" . $vbulletin->GPC['forumid'] . ", parentlist)");
+	$forumdata->delete();
+
+	define('CP_REDIRECT', 'forum.php');
+	print_stop_message('deleted_forum_successfully');
+}
+
+// ###################### Start do order #######################
+if ($_POST['do'] == 'doorder')
+{
+	$vbulletin->input->clean_array_gpc('p', array('order' => TYPE_ARRAY));
+
+	if (is_array($vbulletin->GPC['order']))
+	{
+		$forums = $db->query_read("SELECT * FROM " . TABLE_PREFIX . "forum");
+		while ($forum = $db->fetch_array($forums))
+		{
+			if (!isset($vbulletin->GPC['order']["$forum[forumid]"]))
 			{
-				if (!$holiday_calendarid)
-				{
-					$holiday_calendarid = -1; // stop this loop from running again in the future
-					if (is_array($eventinfo['holiday_calendarids']))
+				continue;
+			}
+
+			$displayorder = intval($vbulletin->GPC['order']["$forum[forumid]"]);
+			if ($forum['displayorder'] != $displayorder)
+			{
+				$forumdm = datamanager_init('Forum', $vbulletin, ERRTYPE_SILENT);
+				$forumdm->set_existing($forum);
+				$forumdm->setr('displayorder', $displayorder);
+				$forumdm->save();
+				unset($forumdm);
+			}
+		}
+	}
+
+	build_forum_permissions();
+
+	define('CP_REDIRECT', 'forum.php?do=modify');
+	print_stop_message('saved_display_order_successfully');
+}
+
+// ###################### Start forum_is_related_to_forum #######################
+function forum_is_related_to_forum($partial_list, $forumid, $full_list)
+{
+	// This function is only used below, only for expand/collapse of forums.
+	// If the first forum's parent list is contained within the second,
+	// then it is considered related (think of it as an aunt or uncle forum).
+
+	$partial = explode(',', $partial_list);
+	if ($partial[0] == $forumid)
+	{
+		array_shift($partial);
+	}
+	$full = explode(',', $full_list);
+
+	foreach ($partial AS $fid)
+	{
+		if (!in_array($fid, $full))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// ###################### Start modify #######################
+if ($_REQUEST['do'] == 'modify')
+{
+	$vbulletin->input->clean_array_gpc('r', array(
+		'forumid' 	=> TYPE_UINT,
+		'expandid'	=> TYPE_INT,
+	));
+
+	if (!$vbulletin->GPC['expandid'])
+	{
+		$vbulletin->GPC['expandid'] = -1;
+	}
+	else if ($vbulletin->GPC['expandid'] == -2)
+	{
+		// expand all -- easiest to just turn off collapsing
+		$vbulletin->options['cp_collapse_forums'] = false;
+	}
+
+	// a little javascript for the options menus
+	?>
+	<script type="text/javascript">
+	<!--
+	function js_forum_jump(foruminfo)
+	{
+		var cp_collapse_forums = <?php echo intval($vbulletin->options['cp_collapse_forums']); ?>;
+		if (foruminfo == 0)
+		{
+			alert('<?php echo addslashes_js($vbphrase['please_select_forum']); ?>');
+			return;
+		}
+		else if (typeof(document.cpform.forumid) != 'undefined')
+		{
+			action = document.cpform.controls.options[document.cpform.controls.selectedIndex].value;
+		}
+		else
+		{
+			action = eval("document.cpform.f" + foruminfo + ".options[document.cpform.f" + foruminfo + ".selectedIndex].value");
+		}
+		if (action != '')
+		{
+			switch (action)
+			{
+				case 'edit': page = "forum.php?do=edit&f="; break;
+				case 'remove': page = "forum.php?do=remove&f="; break;
+				case 'add': page = "forum.php?do=add&parentid="; break;
+				case 'addmod': page = "moderator.php?do=add&f="; break;
+				case 'listmod': page = "moderator.php?do=showmods&f=";break;
+				case 'annc': page = "announcement.php?do=add&f="; break;
+				case 'view': page = "../forumdisplay.php?f="; break;
+				case 'perms':
+					if (cp_collapse_forums > 0)
 					{
-						foreach ($eventinfo['holiday_calendarids'] AS $potential_holiday_calendarid)
-						{
-							if ($vbulletin->userinfo['calendarpermissions']["$potential_holiday_calendarid"] & $vbulletin->bf_ugp_calendarpermissions['canviewcalendar'])
-							{
-								$holiday_calendarid = $potential_holiday_calendarid;
-								break;
-							}
-						}
+						page = "forumpermission.php?do=modify&f=";
 					}
+					else
+					{
+						page = "forumpermission.php?do=modify&devnull=";
+					}
+					break;
+				case 'podcast': page = "forum.php?do=podcast&f="; break;
+				case 'empty': page = "forum.php?do=empty&f="; break;
+			}
+			document.cpform.reset();
+			jumptopage = page + foruminfo + "&s=<?php echo $vbulletin->session->vars['sessionhash']; ?>";
+			if (action == 'perms')
+			{
+				window.location = jumptopage + '#forum' + foruminfo;
+			}
+			else
+			{
+				window.location = jumptopage;
+			}
+		}
+		else
+		{
+			alert('<?php echo addslashes_js($vbphrase['invalid_action_specified']); ?>');
+		}
+	}
+
+	function js_moderator_jump(foruminfo)
+	{
+		if (foruminfo == 0)
+		{
+			alert('<?php echo addslashes_js($vbphrase['please_select_forum']); ?>');
+			return;
+		}
+		else if (typeof(document.cpform.forumid) != 'undefined')
+		{
+			modinfo = document.cpform.moderator[document.cpform.moderator.selectedIndex].value;
+		}
+		else
+		{
+			modinfo = eval("document.cpform.m" + foruminfo + ".options[document.cpform.m" + foruminfo + ".selectedIndex].value");
+			document.cpform.reset();
+		}
+
+		switch (modinfo)
+		{
+			case 'add': window.location = "moderator.php?s=<?php echo $vbulletin->session->vars['sessionhash']; ?>&do=add&f=" + foruminfo; break;
+			case 'show': window.location = "moderator.php?s=<?php echo $vbulletin->session->vars['sessionhash']; ?>&do=showmods&f=" + foruminfo; break;
+			case '': return false; break;
+			default: window.location = "moderator.php?s=<?php echo $vbulletin->session->vars['sessionhash']; ?>&do=edit&moderatorid=" + modinfo; break;
+		}
+	}
+
+	function js_returnid()
+	{
+		return document.cpform.forumid.value;
+	}
+	//-->
+	</script>
+	<?php
+
+	$forumoptions1 = array(
+		'edit'    => $vbphrase['edit_forum'],
+		'view'    => $vbphrase['view_forum'],
+		'remove'  => $vbphrase['delete_forum'],
+		'add'     => $vbphrase['add_child_forum'],
+		'addmod'  => $vbphrase['add_moderator'],
+		'listmod' => $vbphrase['list_moderators'],
+		'annc'    => $vbphrase['add_announcement'],
+		'perms'   => $vbphrase['view_permissions'],
+		'podcast' => $vbphrase['podcast_settings'],
+	);
+
+	$forumoptions2 = array(
+		'edit'    => $vbphrase['edit_forum'],
+		'view'    => $vbphrase['view_forum'],
+		'remove'  => $vbphrase['delete_forum'],
+		'add'     => $vbphrase['add_child_forum'],
+		'addmod'  => $vbphrase['add_moderator'],
+		'annc'    => $vbphrase['add_announcement'],
+		'perms'   => $vbphrase['view_permissions'],
+		'podcast' => $vbphrase['podcast_settings'],
+	);
+
+	require_once(DIR . '/includes/functions_databuild.php');
+
+	if ($vbulletin->options['cp_collapse_forums'] != 2)
+	{
+		print_form_header('forum', 'doorder');
+		print_table_header($vbphrase['forum_manager'], 4);
+		print_description_row($vbphrase['if_you_change_display_order'], 0, 4);
+
+		require_once(DIR . '/includes/functions_forumlist.php');
+		cache_moderators();
+
+		$forums = array();
+		$expanddata = array('forumid' => -1, 'parentlist' => '');
+		if (is_array($vbulletin->forumcache))
+		{
+			foreach($vbulletin->forumcache AS $forumid => $forum)
+			{
+				$forums["$forum[forumid]"] = construct_depth_mark($forum['depth'], '--') . ' ' . $forum['title'];
+				if ($forum['forumid'] == $vbulletin->GPC['expandid'])
+				{
+					$expanddata = $forum;
+				}
+			}
+		}
+		$expanddata['parentids'] = explode(',', $expanddata['parentlist']);
+
+		if ($vbulletin->options['cp_collapse_forums'])
+		{
+			$expandtext = '[-] ';
+		}
+		else
+		{
+			$expandtext = '';
+		}
+
+		if (is_array($vbulletin->forumcache))
+		{
+			foreach($vbulletin->forumcache AS $key => $forum)
+			{
+				$modcount = sizeof($imodcache["$forum[forumid]"]);
+				if ($modcount)
+				{
+					$mainoptions =& $forumoptions1;
+					$mainoptions['listmod'] = $vbphrase['list_moderators'] . " ($modcount)";
+				}
+				else
+				{
+					$mainoptions =& $forumoptions2;
 				}
 
-				if ($holiday_calendarid < 0)
+				$cell = array();
+				if (!$vbulletin->options['cp_collapse_forums'] OR $forum['forumid'] == $expanddata['forumid'] OR in_array($forum['forumid'], $expanddata['parentids']))
+				{
+					$cell[] = "<a name=\"forum$forum[forumid]\">&nbsp;</a> $expandtext<b>" . construct_depth_mark($forum['depth'],'- - ') . "<a href=\"forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=edit&amp;f=$forum[forumid]\">$forum[title]</a>" . iif(!empty($forum['password']),'*') . " " . iif($forum['link'], "(<a href=\"" . htmlspecialchars_uni($forum['link']) . "\">" . $vbphrase['link'] . "</a>)") . "</b>";
+					$cell[] = "\n\t<select name=\"f$forum[forumid]\" onchange=\"js_forum_jump($forum[forumid]);\" class=\"bginput\">\n" . construct_select_options($mainoptions) . "\t</select><input type=\"button\" class=\"button\" value=\"" . $vbphrase['go'] . "\" onclick=\"js_forum_jump($forum[forumid]);\" />\n\t";
+					$cell[] = "<input type=\"text\" class=\"bginput\" name=\"order[$forum[forumid]]\" value=\"$forum[displayorder]\" tabindex=\"1\" size=\"3\" title=\"" . $vbphrase['edit_display_order'] . "\" />";
+
+					$mods = array('no_value' => $vbphrase['moderators'].' (' . sizeof($imodcache["$forum[forumid]"]) . ')');
+					if (is_array($imodcache["$forum[forumid]"]))
+					{
+						foreach ($imodcache["$forum[forumid]"] AS $moderator)
+						{
+							$mods['']["$moderator[moderatorid]"] = $moderator['username'];
+						}
+					}
+					$mods['add'] = $vbphrase['add_moderator'];
+					$cell[] = "\n\t<select name=\"m$forum[forumid]\" onchange=\"js_moderator_jump($forum[forumid]);\" class=\"bginput\">\n" . construct_select_options($mods) . "\t</select><input type=\"button\" class=\"button\" value=\"" . $vbphrase['go'] . "\" onclick=\"js_moderator_jump($forum[forumid]);\" />\n\t";
+				}
+				else if (
+					$vbulletin->options['cp_collapse_forums'] AND
+						(
+						$forum['parentid'] == $expanddata['forumid'] OR
+						$forum['parentid'] == -1 OR
+						forum_is_related_to_forum($forum['parentlist'], $forum['forumid'], $expanddata['parentlist'])
+						)
+					)
+				{
+					$cell[] = "<a name=\"forum$forum[forumid]\">&nbsp;</a> <a href=\"forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=modify&amp;expandid=$forum[forumid]\">[+]</a>  <b>" . construct_depth_mark($forum['depth'],'- - ') . "<a href=\"forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=edit&amp;f=$forum[forumid]\">$forum[title]</a>" . iif(!empty($forum['password']),'*') . " " . iif($forum['link'], "(<a href=\"$forum[link]\">" . $vbphrase['link'] . "</a>)") . "</b>";
+					$cell[] = construct_link_code($vbphrase['expand'], "forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=modify&amp;expandid=$forum[forumid]");
+					$cell[] = "&nbsp;";
+					$cell[] = "&nbsp;";
+				}
+				else
 				{
 					continue;
 				}
 
-				$eventstore["$eventid"]['calendarid'] = $holiday_calendarid;
-				$eventinfo['calendarid'] = $holiday_calendarid;
-			}
-
-			if ($eventinfo['userid'] == $vbulletin->userinfo['userid'] OR $vbulletin->userinfo['calendarpermissions']["$eventinfo[calendarid]"] & $vbulletin->bf_ugp_calendarpermissions['canviewothersevent'] OR ($eventinfo['holidayid'] AND $vbulletin->options['showholidays']))
-			{
-				if (!$eventinfo['recurring'] AND !$vbulletin->options['showeventtype'] AND !$eventinfo['singleday'] AND cache_event_info($eventinfo, $todaydate['mon'], $todaydate['mday'], $todaydate['year']))
+				if ($forum['parentid'] == -1)
 				{
-					$events["$eventid"][] = $gettime . "_$sub";
+					print_cells_row(array($vbphrase['forum'], $vbphrase['controls'], $vbphrase['display_order'], $vbphrase['moderators']), 1, 'tcat');
 				}
-				else
-				{
-					while ($iterations < $vbulletin->options['showevents'])
-					{
-						$addcache = false;
-
-						$todaydate = getdate($gettime);
-						if (isset($eventinfo['holidayid']) AND $eventinfo['holidayid'] AND $eventinfo['recurring'] == 6)
-						{
-							if ($eventinfo['recuroption'] == "$todaydate[mon]|$todaydate[mday]")
-							{
-								$addcache = true;
-							}
-						}
-						else if (cache_event_info($eventinfo, $todaydate['mon'], $todaydate['mday'], $todaydate['year']))
-						{
-							$addcache = true;
-						}
-
-						if ($addcache)
-						{
-							if (!$vbulletin->options['showeventtype'])
-							{
-								$events["$eventid"][] = $gettime . "_$sub";
-							}
-							else
-							{
-								$events["$gettime"][] = $eventid;
-							}
-							$eventcount++;
-						}
-
-						$iterations++;
-						$gettime = strtotime('+1 day', $gettime);
-					}
-				}
+				print_cells_row($cell);
 			}
 		}
-	}
 
-	if (!empty($events))
-	{
-		if ($vbulletin->options['showeventtype'])
+		print_table_footer(4, "<input type=\"submit\" class=\"button\" tabindex=\"1\" value=\"" . $vbphrase['save_display_order'] . "\" accesskey=\"s\" />" . construct_button_code($vbphrase['add_new_forum'], "forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=add"));
+
+		if ($vbulletin->options['cp_collapse_forums'])
 		{
-			ksort($events, SORT_NUMERIC);
-		}
-		else
-		{
-			function groupbyevent($a, $b)
-			{
-				if ($a[0] == $b[0])
-				{
-					return 0;
-				}
-				else
-				{
-					$values1 = explode('_', $a[0]);
-					$values2 = explode('_', $b[0]);
-					if ($values1[0] != $values2[0])
-					{
-						return ($values1[0] < $values2[0]) ? -1 : 1;
-					}
-					else
-					{
-						// Same day events. Check the event start time to order them properly (compare number of seconds from 00:00)
-						return ($values1[1] < $values2[1]) ? -1 : 1;
-					}
-				}
-			}
-			uasort($events, 'groupbyevent');
-			// this crazy code is to remove $sub added above that ensures a event maintains its position after the sort
-			// if associative values are the same
-			foreach($events AS $eventid => $times)
-			{
-				foreach ($times AS $key => $time)
-				{
-					$events["$eventid"]["$key"] = intval($time);
-				}
-			}
+			echo '<p class="smallfont" align="center">' . construct_link_code($vbphrase['expand_all'], "forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=modify&amp;expandid=-2") . '</p>';
 		}
 
-		$upcomingevents = '';
-		foreach($events AS $index => $value)
-		{
-			$pastevent = 0;
-			$pastcount = 0;
-
-			$comma = $eventdates = $daysevents = '';
-			if (!$vbulletin->options['showeventtype'])
-			{	// Group by Event // $index = $eventid
-				$eventinfo = $eventstore["$index"];
-				if (empty($eventinfo['recurring']) AND empty($eventinfo['singleday']))
-				{	// ranged event -- show it from its real start and real end date (vbgmdate)
-					$fromdate = vbdate($vbulletin->options['dateformat'], $eventinfo['dateline_from_user'], false, true, false, true);
-					$todate = vbdate($vbulletin->options['dateformat'], $eventinfo['dateline_to_user'], false, true, false, true);
-					if ($fromdate != $todate)
-					{
-						$eventdates = construct_phrase($vbphrase['event_x_to_y'], $fromdate, $todate);
-					}
-					else
-					{
-						$eventdates = vbdate($vbulletin->options['dateformat'], $eventinfo['dateline_from_user'], false, true, false, true);
-					}
-					$day = vbdate('Y-n-j', $eventinfo['dateline_from_user'], false, false);
-				}
-				else
-				{
-					unset($day);
-					foreach($value AS $key => $dateline)
-					{
-						if ((strtotime('-1 day', $dateline)) == $pastevent AND !$eventinfo['holidayid'])
-						{
-							$pastevent = $dateline;
-							$pastcount++;
-							continue;
-						}
-						else
-						{
-							if ($pastcount)
-							{
-								$eventdates = construct_phrase($vbphrase['event_x_to_y'], $eventdates, vbdate($vbulletin->options['dateformat'], $pastevent, false, true, false));
-							}
-							$pastcount = 0;
-							$pastevent = $dateline;
-						}
-						if (!$day)
-						{
-							$day = vbdate('Y-n-j', $dateline, false, false, false);
-						}
-						$eventdates .= $comma . vbdate($vbulletin->options['dateformat'], $dateline, false, true, false);
-						$comma = ', ';
-					}
-					if ($pastcount)
-					{
-						$eventdates = construct_phrase($vbphrase['event_x_to_y'], $eventdates, vbdate($vbulletin->options['dateformat'], $pastevent, false, true, false));
-					}
-				}
-
-				if ($eventinfo['holidayid'])
-				{
-					$callink = '<a href="calendar.php?' . $vbulletin->session->vars['sessionurl'] . "do=getinfo&amp;day=$day&amp;c=$eventinfo[calendarid]\">" . $vbphrase['holiday' . $eventinfo['holidayid'] . '_title'] . "</a>";
-				}
-				else
-				{
-					$callink = '<a href="calendar.php?' . $vbulletin->session->vars['sessionurl'] . "do=getinfo&amp;day=$day&amp;e=$eventinfo[eventid]&amp;c=$eventinfo[calendarid]\">$eventinfo[title]</a>";
-				}
-			}
-			else
-			{	// Group by Date
-				$eventdate = vbdate($vbulletin->options['dateformat'], $index, false, true, false);
-
-				$day = vbdate('Y-n-j', $index, false, false, false);
-				foreach($value AS $key => $eventid)
-				{
-					$eventinfo = $eventstore["$eventid"];
-					if ($eventinfo['holidayid'])
-					{
-						$daysevents .= $comma . '<a href="calendar.php?' . $vbulletin->session->vars['sessionurl'] . "do=getinfo&amp;day=$day&amp;c=$eventinfo[calendarid]\">" . $vbphrase['holiday' . $eventinfo['holidayid'] . '_title'] . "</a>";
-					}
-					else
-					{
-						$daysevents .= $comma . '<a href="calendar.php?' . $vbulletin->session->vars['sessionurl'] . "do=getinfo&amp;day=$day&amp;e=$eventinfo[eventid]&amp;c=$eventinfo[calendarid]\">$eventinfo[title]</a>";
-					}
-					$comma = ', ';
-				}
-			}
-
-			($hook = vBulletinHook::fetch_hook('forumhome_event')) ? eval($hook) : false;
-			$templater = vB_Template::create('forumhome_event');
-				$templater->register('callink', $callink);
-				$templater->register('daysevents', $daysevents);
-				$templater->register('eventdate', $eventdate);
-				$templater->register('eventdates', $eventdates);
-			$upcomingevents .= $templater->render();
-		}
-		// memory saving
-		unset($events, $eventstore);
-		$show['upcomingevents'] = iif ($upcomingevents, true, false);
-	}
-	$show['todaysevents'] = iif ($vbulletin->options['showevents'] == 1, true, false);
-}
-else
-{
-	$show['upcomingevents'] = false;
-}
-
-// ### LOGGED IN USERS #################################################
-if (($vbulletin->options['displayloggedin'] == 1 OR $vbulletin->options['displayloggedin'] == 2 OR ($vbulletin->options['displayloggedin'] > 2 AND $vbulletin->userinfo['userid'])) AND !$show['search_engine'])
-{
-	$datecut = TIMENOW - $vbulletin->options['cookietimeout'];
-	$numbervisible = 0;
-	$numberregistered = 0;
-	$numberguest = 0;
-
-	$hook_query_fields = $hook_query_joins = $hook_query_where = '';
-	($hook = vBulletinHook::fetch_hook('forumhome_loggedinuser_query')) ? eval($hook) : false;
-
-	$forumusers = $db->query_read_slave("
-		SELECT
-			user.username, (user.options & " . $vbulletin->bf_misc_useroptions['invisible'] . ") AS invisible, user.usergroupid, user.lastvisit,
-			session.userid, session.inforum, session.lastactivity, session.badlocation,
-			IF(displaygroupid=0, user.usergroupid, displaygroupid) AS displaygroupid, infractiongroupid
-			$hook_query_fields
-		FROM " . TABLE_PREFIX . "session AS session
-		LEFT JOIN " . TABLE_PREFIX . "user AS user ON(user.userid = session.userid)
-		$hook_query_joins
-		WHERE session.lastactivity > $datecut
-			$hook_query_where
-		" . iif($vbulletin->options['displayloggedin'] == 1 OR $vbulletin->options['displayloggedin'] == 3, "ORDER BY username ASC") . "
-	");
-
-	if ($vbulletin->userinfo['userid'])
-	{
-		// fakes the user being online
-		$vbulletin->userinfo['joingroupid'] = iif($vbulletin->userinfo['displaygroupid'], $vbulletin->userinfo['displaygroupid'], $vbulletin->userinfo['usergroupid']);
-		$userinfos = array
-		(
-			$vbulletin->userinfo['userid'] => array
-			(
-				'userid'            =>& $vbulletin->userinfo['userid'],
-				'username'          =>& $vbulletin->userinfo['username'],
-				'invisible'         =>& $vbulletin->userinfo['invisible'],
-				'inforum'           => 0,
-				'lastactivity'      => TIMENOW,
-				'lastvisit'         =>& $vbulletin->userinfo['lastvisit'],
-				'usergroupid'       =>& $vbulletin->userinfo['usergroupid'],
-				'displaygroupid'    =>& $vbulletin->userinfo['displaygroupid'],
-				'infractiongroupid' =>& $vbulletin->userinfo['infractiongroupid'],
-			)
-		);
+		echo '<p class="smallfont" align="center">' . $vbphrase['forums_marked_asterisk_are_password_protected'] . '</p>';
 	}
 	else
 	{
-		$userinfos = array();
-	}
+		print_form_header('forum', 'doorder');
+		print_table_header($vbphrase['forum_manager'], 2);
 
-	$inforum = array();
-	while ($loggedin = $db->fetch_array($forumusers))
-	{
-		$userid = $loggedin['userid'];
-		if (!$userid)
-		{	// Guest
-			$numberguest++;
-			if (!isset($inforum["$loggedin[inforum]"]))
-			{
-				$inforum["$loggedin[inforum]"] = 0;
-			}
-			if (!$loggedin['badlocation'])
-			{
-				$inforum["$loggedin[inforum]"]++;
-			}
-		}
-		else if (empty($userinfos["$userid"]) OR ($userinfos["$userid"]['lastactivity'] < $loggedin['lastactivity']))
-		{
-			$userinfos["$userid"] = $loggedin;
-		}
-	}
+		print_cells_row(array($vbphrase['forum'], $vbphrase['controls']), 1, 'tcat');
+		$cell = array();
 
-	// We are a guest and somehow got missed by the query.
-	if (!$vbulletin->userinfo['userid'] AND !$numberguest)
-	{
-		$numberguest++;
-	}
+		$select = '<select name="forumid" id="sel_foruid" tabindex="1" class="bginput">';
+		$select .= construct_forum_chooser($vbulletin->GPC['forumid'], true);
+		$select .= "</select>\n";
 
-	$activeusers = array();
-/*	VBIV-12365
-	Users who are moderated or awaiting e-mail confirmation were being counted as guests.
-	This was causing online count discrepancies between this and online.php, removed code */
-	foreach ($userinfos AS $userid => $loggedin)
-	{
-		$numberregistered++;
-		if ($userid != $vbulletin->userinfo['userid'] AND !$loggedin['badlocation'])
-		{
-			if (!isset($inforum["$loggedin[inforum]"]))
-			{
-				$inforum["$loggedin[inforum]"] = 0;
-			}
-			$inforum["$loggedin[inforum]"]++;
-		}
-
-		fetch_musername($loggedin);
-		$loggedin['comma'] = $vbphrase['comma_space'];
-		($hook = vBulletinHook::fetch_hook('forumhome_loggedinuser')) ? eval($hook) : false;
-
-		if (fetch_online_status($loggedin))
-		{
-			$numbervisible++;
-			$activeusers[$numbervisible] = $loggedin;
-		}
-	}
-
-	// Last element
-	if ($numbervisible)
-	{
-		$activeusers[$numbervisible]['comma'] = '';
-	}
-
-	// memory saving
-	unset($userinfos, $loggedin);
-
-	$db->free_result($forumusers);
-
-	$totalonline = $numberregistered + $numberguest;
-	$numberinvisible = $numberregistered - $numbervisible;
-
-	// ### MAX LOGGEDIN USERS ################################
-	if (intval($vbulletin->maxloggedin['maxonline']) <= $totalonline)
-	{
-		$vbulletin->maxloggedin['maxonline'] = $totalonline;
-		$vbulletin->maxloggedin['maxonlinedate'] = TIMENOW;
-		build_datastore('maxloggedin', serialize($vbulletin->maxloggedin), 1);
-	}
-
-	$recordusers = vb_number_format($vbulletin->maxloggedin['maxonline']);
-	$recorddate = vbdate($vbulletin->options['dateformat'], $vbulletin->maxloggedin['maxonlinedate'], true);
-	$recordtime = vbdate($vbulletin->options['timeformat'], $vbulletin->maxloggedin['maxonlinedate']);
-
-	$show['loggedinusers'] = true;
-}
-else
-{
-	$show['loggedinusers'] = false;
-}
-
-// ### GET FORUMS & MODERATOR iCACHES ########################
-cache_ordered_forums(1, 1, $vbulletin->userinfo['userid']);
-if ($vbulletin->options['showmoderatorcolumn'])
-{
-	cache_moderators();
-}
-else if ($vbulletin->userinfo['userid'])
-{
-	cache_moderators($vbulletin->userinfo['userid']);
-}
-
-// define max depth for forums display based on $vbulletin->options[forumhomedepth]
-define('MAXFORUMDEPTH', $vbulletin->options['forumhomedepth']);
-
-$forumbits = construct_forum_bit($forumid);
-
-// ### BOARD STATISTICS #################################################
-
-// get total threads & posts from the forumcache
-$totalthreads = 0;
-$totalposts = 0;
-if (is_array($vbulletin->forumcache))
-{
-	foreach ($vbulletin->forumcache AS $forum)
-	{
-		$totalthreads += $forum['threadcount'];
-		$totalposts += $forum['replycount'];
+		$cell[] = $select;
+		$cell[] = "\n\t<select name=\"controls\" class=\"bginput\">\n" . construct_select_options($forumoptions1) . "\t</select><input type=\"button\" class=\"button\" value=\"" . $vbphrase['go'] . "\" onclick=\"js_forum_jump(js_returnid());\" />\n\t";
+		print_cells_row($cell);
+		print_table_footer(2, construct_button_code($vbphrase['add_new_forum'], "forum.php?" . $vbulletin->session->vars['sessionurl'] . "do=add"));
 	}
 }
-$totalthreads = vb_number_format($totalthreads);
-$totalposts = vb_number_format($totalposts);
 
-// get total members and newest member from template
-$numbermembers = vb_number_format($vbulletin->userstats['numbermembers']);
-$newuserinfo = array(
-	'userid'   => $vbulletin->userstats['newuserid'],
-	'username' => $vbulletin->userstats['newusername']
-);
-$activemembers = vb_number_format($vbulletin->userstats['activemembers']);
-$show['activemembers'] = ($vbulletin->options['activememberdays'] > 0 AND ($vbulletin->options['activememberoptions'] & 2)) ? true : false;
-
-$ad_location['board_after_forums'] = vB_Template::create('ad_board_after_forums')->render();
-$ad_location['board_below_whats_going_on'] = vB_Template::create('ad_board_below_whats_going_on')->render();
-
-// ### SIDEBAR #################################################
-$show['sidebar'] = false;
-$close_sidebar = false;
-// disable blocks for ie6
-if ($vbulletin->options['enablesidebar'] AND !(is_browser('ie') AND !is_browser('ie', 7)) AND !VB_API)
+// ###################### Start add podcast #######################
+if ($_REQUEST['do'] == 'podcast')
 {
-	require_once(DIR . '/includes/class_block.php');
-	$blockmanager = vB_BlockManager::create($vbulletin);
-	$sidebar = $blockmanager->getSidebarHTML();
-	if ($sidebar)
+	if (!($forum = fetch_foruminfo($vbulletin->GPC['forumid'], false)))
 	{
-		$show['sidebar'] = true;
+		print_stop_message('invalid_forum_specified');
 	}
+	require_once(DIR . '/includes/adminfunctions_misc.php');
 
-	$vbulletin->input->clean_array_gpc('c', array(
-		'vbulletin_sidebar_collapse' => TYPE_INT
+	$forum['title'] = str_replace('&amp;', '&', $forum['title']);
+
+	$podcast = $db->query_first("
+		SELECT *
+		FROM " . TABLE_PREFIX . "podcast
+		WHERE forumid = $forum[forumid]"
+	);
+
+	print_form_header('forum', 'updatepodcast');
+	print_table_header(construct_phrase($vbphrase['x_y_id_z'], $vbphrase['podcast_settings'], $forum['title'], $forum['forumid']));
+	construct_hidden_code('forumid', $forum['forumid']);
+
+	print_yes_no_row($vbphrase['enabled'], 'enabled', $podcast['enabled']);
+	print_podcast_chooser($vbphrase['category'], 'categoryid', $podcast['categoryid']);
+	print_input_row($vbphrase['media_author'] . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 255) . '</dfn>', 'author', $podcast['author']);
+	print_input_row($vbphrase['owner_name']  . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 255), 'ownername', $podcast['ownername']);
+	print_input_row($vbphrase['owner_email']  . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 255), 'owneremail', $podcast['owneremail']);
+	print_input_row($vbphrase['image_url'], 'image', $podcast['image']);
+	print_input_row($vbphrase['subtitle']  . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 255) . '</dfn>', 'subtitle', $podcast['subtitle']);
+	print_textarea_row($vbphrase['keywords'] . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 255) . '</dfn>', 'keywords', $podcast['keywords'], 2, 40);
+	print_textarea_row($vbphrase['summary'] . '<dfn>' . construct_phrase($vbphrase['maximum_chars_x'], 4000) . '</dfn>', 'summary', $podcast['summary'], 4, 40);
+	print_yes_no_row($vbphrase['explicit'], 'explicit', $podcast['explicit']);
+
+	print_submit_row($vbphrase['save']);
+}
+
+// ###################### Start add podcast #######################
+if ($_POST['do'] == 'updatepodcast')
+{
+	$vbulletin->input->clean_array_gpc('p', array(
+		'categoryid' => TYPE_UINT,
+		'explicit'   => TYPE_BOOL,
+		'enabled'    => TYPE_BOOL,
+		'author'     => TYPE_STR,
+		'owneremail' => TYPE_STR,
+		'ownername'  => TYPE_STR,
+		'image'      => TYPE_STR,
+		'subtitle'   => TYPE_STR,
+		'keywords'   => TYPE_STR,
+		'summary'    => TYPE_STR,
 	));
 
-	$close_sidebar = ($vbulletin->GPC['vbulletin_sidebar_collapse'] == 1 ? true : false);
-	$show['sidebarposition'] = vB_Template_Runtime::fetchStyleVar($vbulletin->options['sidebarposition'] == 0 ? 'left' : 'right');
-	$sidebar_class = ($close_sidebar ? 'sidebar_nomargin_' . $show['sidebarposition'] : '');
+	if (!($forum = fetch_foruminfo($vbulletin->GPC['forumid'], false)))
+	{
+		print_stop_message('invalid_forum_specified');
+	}
+	require_once(DIR . '/includes/adminfunctions_misc.php');
+
+	$category = fetch_podcast_categoryarray($vbulletin->GPC['categoryid']);
+
+	$db->query_write("
+		REPLACE INTO " . TABLE_PREFIX . "podcast (forumid, enabled, categoryid, category, author, image, explicit, keywords, owneremail, ownername, subtitle, summary)
+		VALUES (
+			$forum[forumid],
+			" . intval($vbulletin->GPC['enabled']) . ",
+			" . $vbulletin->GPC['categoryid'] . ",
+			'" . $db->escape_string(serialize($category)) . "',
+			'" . $db->escape_string($vbulletin->GPC['author']) . "',
+			'" . $db->escape_string($vbulletin->GPC['image']) . "',
+			" . intval($vbulletin->GPC['explicit']) . ",
+			'" . $db->escape_string($vbulletin->GPC['keywords']) . "',
+			'" . $db->escape_string($vbulletin->GPC['owneremail']) . "',
+			'" . $db->escape_string($vbulletin->GPC['ownername']) . "',
+			'" . $db->escape_string($vbulletin->GPC['subtitle']) . "',
+			'" . $db->escape_string($vbulletin->GPC['summary']) . "'
+		)
+	");
+
+	build_forum_permissions();
+
+	define('CP_REDIRECT', 'forum.php?do=modify');
+	print_stop_message('updated_podcast_settings_successfully');
 }
 
-if ($vbulletin->options['wgo_members'] AND ($vbulletin->userinfo['permissions']['genericpermissions2'] & $vbulletin->bf_ugp_genericpermissions2['canwgomembers']))
-{
-	$show['wgo_members']= true;
-
-	if ($vbulletin->options['wgo_members_24'])
-	{
-		$cutoff = TIMENOW - 86400;
-		$description = $vbphrase['wgo_members_visited_today_24'];
-	}
-	else
-	{
-		$description = $vbphrase['wgo_members_visited_today'];
-		$tnow = date('YmdHis',TIMENOW - intval($vbulletin->options['hourdiff']));
-		$cutoff = TIMENOW - (substr($tnow,8,2)*3600 + substr($tnow,10,2)*60 + substr($tnow,12,2));
-	}
-
-	$wgo_members = array();
-	$wgo_members_list = array();
-
-	($hook = vBulletinHook::fetch_hook('forumhome_whovisited_prelist')) ? eval($hook) : false;
-
-	if ($vbulletin->options['wgo_members_names'])
-	{
-		$todaysusers = $vbulletin->db->query_read_slave("
-			SELECT userid, options, usergroupid,
-			displaygroupid, lastactivity, username
-			FROM " . TABLE_PREFIX . "user
-			WHERE lastactivity > $cutoff
-			ORDER BY username
-		");
-
-		$count = 0;
-		$wgo_members['totaltoday'] = 0;
-
-		while ($today = $vbulletin->db->fetch_array($todaysusers))
-		{
-			$today['markinv'] = '';
-			$today[visible] = true ;
-			$wgo_members['totaltoday'] += 1;
-
-			if ($today['options'] & $vbulletin->bf_misc_useroptions['invisible'])
-			{
-				$today['visible'] = false ;
-				if (($vbulletin->userinfo['permissions']['genericpermissions']
-				& $vbulletin->bf_ugp_genericpermissions['canseehidden'])
-				OR $today['userid'] == $vbulletin->userinfo['userid'])
-				{
-					$today['markinv'] = '*';
-					$today['visible'] = true ;
-				}
-			}
-
-			if ($today['visible'])
-			{
-				$count += 1;
-				fetch_musername($today);
-				$today['comma'] = $vbphrase['comma_space'];
-				$today['wrdate'] = vbdate($vbulletin->options['timeformat'], $today['lastactivity']);
-				$wgo_members_list[$count] = $today;
-			}
-		}
-
-		if ($count)
-		{
-			$wgo_members_list[$count]['comma'] = '';
-		}
-
-		($hook = vBulletinHook::fetch_hook('forumhome_whovisited_list')) ? eval($hook) : false;
-	}
-	else
-	{
-		$todaysusers = $vbulletin->db->query_first_slave("
-			SELECT COUNT(userid) AS whotoday
-			FROM " . TABLE_PREFIX . "user
-			WHERE lastactivity > $cutoff
-		");
-
-		($hook = vBulletinHook::fetch_hook('forumhome_whovisited_nonames')) ? eval($hook) : false;
-
-		$wgo_members['totaltoday'] = $todaysusers['whotoday'];
-	}
-
-	if ($vbulletin->options['wgo_members_most'] AND $vbulletin->options['wgo_members_24'])
-	{
-		if (!empty($vbulletin->maxloggedin))
-		{
-			if ($wgo_members['totaltoday'] > intval($vbulletin->maxloggedin['maxvisitors']))
-			{
-				$vbulletin->maxloggedin['maxvisitorsdate'] = TIMENOW;
-				$vbulletin->maxloggedin['maxvisitors'] = $wgo_members['totaltoday'];
-				build_datastore('maxloggedin', serialize($vbulletin->maxloggedin),1);
-			}
-			$wgo_members['visitors'] = construct_phrase(
-				$vbphrase['wgo_members_members_day'], vb_number_format($vbulletin->maxloggedin['maxvisitors']),
-				vbdate( $vbulletin->options['dateformat'], $vbulletin->maxloggedin['maxvisitorsdate'], true ),
-				vbdate( $vbulletin->options['timeformat'], $vbulletin->maxloggedin['maxvisitorsdate'] )
-			);
-		}
-	}
-
-	$wgo_members['url'] = 'online.php?who=members';
-	$wgo_members['ftotaltoday'] = vb_number_format($wgo_members['totaltoday']);
-	$wgo_members['whotitle'] = construct_phrase($description,$wgo_members['ftotaltoday']);
-
-	if ($vbulletin->options['wgo_members_collapse'])
-	{
-		$keys = explode(chr(10),$_COOKIE['vbulletin_collapse']);
-		$collapse = array_fill_keys($keys,true);
-		$wgo_members['style'] = 'style="display: none"';
-		if (!array_key_exists('wgo_members_list',$collapse))
-		{
-			$wgo_members['collapse'] = '_collapsed';
-		}
-	}
-	else
-	{
-		$wgo_members['style'] = $wgo_members['collapse'] = '';
-	}
-
-	($hook = vBulletinHook::fetch_hook('forumhome_whovisited_postlist')) ? eval($hook) : false;
-}
-else
-{
-	$show['wgo_members']= false;
-}
-
-// ### ALL DONE! SPIT OUT THE HTML AND LET'S GET OUTTA HERE... ###
-($hook = vBulletinHook::fetch_hook('forumhome_complete')) ? eval($hook) : false;
-
-$navbits = construct_navbits($navbits);
-$navbar = render_navbar_template($navbits);
-$templater = vB_Template::create('FORUMHOME');
-	$templater->register_page_templates();
-	$templater->register('activemembers', $activemembers);
-	$templater->register('activeusers', $activeusers);
-	$templater->register('ad_location', $ad_location);
-	$templater->register('birthdays', $birthdays);
-	$templater->register('forumbits', $forumbits);
-	$templater->register('navbar', $navbar);
-	$templater->register('newuserinfo', $newuserinfo);
-	$templater->register('numberguest', $numberguest);
-	$templater->register('numbermembers', $numbermembers);
-	$templater->register('numberregistered', $numberregistered);
-	$templater->register('recorddate', $recorddate);
-	$templater->register('recordtime', $recordtime);
-	$templater->register('recordusers', $recordusers);
-	$templater->register('template_hook', $template_hook);
-	$templater->register('today', $today);
-	$templater->register('totalonline', $totalonline);
-	$templater->register('totalposts', $totalposts);
-	$templater->register('totalthreads', $totalthreads);
-	$templater->register('upcomingevents', $upcomingevents);
-	$templater->register('sidebar', $sidebar);
-	$templater->register('close_sidebar', $close_sidebar);
-	$templater->register('sidebar_class', $sidebar_class);
-	$templater->register('wgo_members',$wgo_members);
-	$templater->register('wgo_members_list',$wgo_members_list);
-print_output($templater->render());
+print_cp_footer();
 
 /*======================================================================*\
 || ####################################################################
@@ -826,3 +837,4 @@ print_output($templater->render());
 || # NulleD By - vBSupport.org
 || ####################################################################
 \*======================================================================*/
+?>

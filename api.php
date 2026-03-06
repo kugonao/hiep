@@ -10,132 +10,88 @@
 || #################################################################### ||
 \*======================================================================*/
 
+// ######################## SET PHP ENVIRONMENT ###########################
 error_reporting(E_ALL & ~E_NOTICE);
 
-define('VB_API', true);
-define('VB_API_VERSION', 8);
-define('VB_API_VERSION_MIN', 1);
-define('CWD_API', (($getcwd = getcwd()) ? $getcwd : '.') . '/includes/api');
-define('NOCOOKIES', true);
+// ##################### DEFINE IMPORTANT CONSTANTS #######################
+define('CVS_REVISION', '$RCSfile$ - $Revision: 92140 $');
 
-require_once(CWD_API . '/functions_api.php');
-require_once(CWD_API . '/class_api.php');
+// #################### PRE-CACHE TEMPLATES AND DATA ######################
+$phrasegroups = array();
+$specialtemplates = array();
 
-$api_m = trim($_REQUEST['api_m']);
-if (strpos($api_m, 'cms.') !== 0)
+// ########################## REQUIRE BACK-END ############################
+require_once('./global.php');
+
+// ############################# LOG ACTION ###############################
+log_admin_action();
+
+// #############################################################################
+// ########################### START MAIN SCRIPT ###############################
+// #############################################################################
+
+print_cp_header($vbphrase['api']);
+
+if (empty($_REQUEST['do']))
 {
-	// Method name should be in the format "scriptname_action" or "scriptname"
-	list($api_script, $action) = explode("_", $api_m);
-	$api_script = str_replace('.', '_', trim($api_script));
-	$_REQUEST['do'] = $_GET['do'] = $_POST['do'] = trim($action);
-	define('VB_API_CMS', false);
-}
-else
-{
-	// CMS methods.
-	// cms.routename_pathsegment1_pathsegment2_...
-	$methodsegments = explode("_", $api_m);
-	$api_script = str_replace('cms.', '', array_shift($methodsegments));
-	$_REQUEST['r'] = implode('/', $methodsegments);
-	define('VB_API_CMS', true);
-}
-// API Version
-$api_version = intval($_REQUEST['api_v']);
-if (!$api_version)
-{
-	$api_version = VB_API_VERSION;
-}
-if ($api_version < VB_API_VERSION_MIN)
-{
-	print_apierror('api_version_too_low', 'This server accepts API version ' . VB_API_VERSION_MIN . ' at least. The requested API version is too low.');
-}
-elseif ($api_version > VB_API_VERSION)
-{
-	print_apierror('api_version_too_high', 'This server accepts API version ' . VB_API_VERSION . ' at most. The requested API version is too high.');
+	$_REQUEST['do'] = 'key';
 }
 
-// Client ID
-$api_c = intval($_REQUEST['api_c']);
-
-// Access token
-$api_s = trim($_REQUEST['api_s']);
-
-// Request Signature Verification Prepare (Verified in init.php)
-$api_sig = trim($_REQUEST['api_sig']);
-unset($_GET['']); // See VBM-835
-$VB_API_PARAMS_TO_VERIFY = $_GET;
-unset($VB_API_PARAMS_TO_VERIFY['api_c'], $VB_API_PARAMS_TO_VERIFY['api_v'], $VB_API_PARAMS_TO_VERIFY['api_s'], $VB_API_PARAMS_TO_VERIFY['api_sig'],
-$VB_API_PARAMS_TO_VERIFY['debug'], $VB_API_PARAMS_TO_VERIFY['showall'], $VB_API_PARAMS_TO_VERIFY['do'], $VB_API_PARAMS_TO_VERIFY['r'], $VB_API_PARAMS_TO_VERIFY['vbseourl']);
-ksort($VB_API_PARAMS_TO_VERIFY);
-$VB_API_REQUESTS = array(
-	'api_m' => $api_m,
-	'api_version' => $api_version,
-	'api_c' => $api_c,
-	'api_s' => $api_s,
-	'api_sig' => $api_sig
-);
-
-if (!$api_script)
+if (in_array($_REQUEST['do'], array('key')))
 {
-	header($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found');
-	die();
-}
-
-// Check if the api method has been defined in versions
-$api_script = loadAPI($api_script, $_REQUEST['do'], $api_version);
-
-//find the latest version of the class defined.  This could be written more
-//cleanly but I'm trying not to touch the logic below that runs the class.
-for($i = $api_version; $i > 0; $i--)
-{
-	$api_classname = 'vB_APIMethod_' . $api_m . '_' . $i;
-	if (class_exists($api_classname))
+	if (!$vbulletin->options['enableapi'])
 	{
-		break;
+		print_table_start();
+		print_description_row($vbphrase['api_disabled_options']);
+		print_table_footer(2, '', '', false);
 	}
 }
 
-if (!class_exists($api_classname))
+// ###################### Start API Key #######################
+if ($_REQUEST['do'] == 'key')
 {
-	$api_classname = 'vB_APIMethod_' . $api_m;
-}
-
-if (class_exists($api_classname))
-{
-	$apimethod = new $api_classname();
-	if ($apimethod instanceof vBI_APIMethod)
+	if (!$vbulletin->options['apikey'])
 	{
-		require_once('./global.php');
-
-		$output = json_encode($apimethod->processed_output());
-
-		$sign = md5($output . $vbulletin->apiclient['apiaccesstoken'] . $vbulletin->apiclient['apiclientid'] . $vbulletin->apiclient['secret'] . $vbulletin->options['apikey']);
-		@header('Authorization: ' . $sign);
-
-		if (!$_REQUEST['debug'])
-		{
-			@header('Content-Type: application/json');
-		}
-
-		// Trigger shutdown event
-		$vbulletin->shutdown->shutdown();
-
-		if (defined('NOSHUTDOWNFUNC'))
-		{
-			exec_shut_down();
-		}
-
-		echo $output;
-		die();
+		print_form_header('api', 'newkey');
+		print_table_header($vbphrase['api_key']);
+		print_description_row($vbphrase['api_key_empty']);
+		print_submit_row($vbphrase['go'], '');
 	}
 	else
 	{
-		header($_SERVER['SERVER_PROTOCOL'] . ' 404 Not Found');
-		die();
+		print_table_start();
+		print_table_header($vbphrase['api_key']);
+		print_label_row(
+		$vbphrase['api_key'],
+		"<div id=\"ctrl_apikey\"><input type=\"text\" class=\"bginput\" name=\"apikey\" id=\"apikey\" value=\"" . $vbulletin->options['apikey'] . "\" size=\"35\" dir=\"\" tabindex=\"1\" readonly=\"readonly\" /></div>",
+		'', 'top', 'apikey'
+		);
+		print_description_row($vbphrase['api_key_description']);
+		print_table_footer(2, '', '', false);
 	}
 }
 
-include($api_script . '.php');
+// ###################### Start Generate API Key #######################
+if ($_REQUEST['do'] == 'newkey')
+{
+	if ($vbulletin->options['apikey'])
+	{
+		print_stop_message('already_has_api_key');
+	}
+
+	$newapikey = fetch_random_password();
+
+	$db->query_write("
+		UPDATE " . TABLE_PREFIX . "setting
+		SET value = '" . $newapikey . "'
+		WHERE varname = 'apikey'
+	");
+	build_options();
+	define('CP_REDIRECT', 'api.php');
+	print_stop_message('api_key_generated_successfully');
+}
+
+print_cp_footer();
 
 /*======================================================================*\
 || ####################################################################
