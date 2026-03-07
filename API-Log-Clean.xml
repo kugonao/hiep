@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<product productid="apiclean_01" active="0">
+	<title>Clean API Log</title>
+	<description><![CDATA[Log Cleaner : This can be uninstalled once it has run - the code runs as part of the install process.]]></description>
+	<text><![CDATA[Script to remove passwords or password hashes from the API Log.<br /><br />This can be uninstalled once it has run as the code runs as part of the install.]]></text>
+	<version>1.0.0</version>
+	<codes>
+		<code version="*">
+			<installcode><![CDATA[
+// Header //
+echo '<center>' . $arr['text'] . '</center>';
+vbflush();
+
+sleep(5);
+]]></installcode>
+		</code>
+		<code version="1.0.0">
+			<installcode><![CDATA[
+$list = $db->query_read_slave("
+	SELECT apilogid, method, parampost
+	FROM " . TABLE_PREFIX . "apilog
+	WHERE parampost LIKE '%password%'
+");
+
+$records = $db->num_rows($list);
+echo "<br /><center>Found $records records to clean.</center>";
+vbflush();
+
+$count = 0;
+$hide = array(
+	'vb_login_password',
+	'vb_login_md5password',
+	'vb_login_md5password_utf',
+	'password',
+	'password_md5',
+	'passwordconfirm',
+	'passwordconfirm_md5',
+	/* Not currently used by mapi 
+	but might be in the future */
+	'currentpassword',
+	'currentpassword_md5',
+	'newpassword',
+	'newpasswordconfirm',
+	'newpassword_md5',
+	'newpasswordconfirm_md5',
+);
+
+while ($entry = $db->fetch_array($list))
+{
+	$post = vb_unserialize($entry['parampost']);
+
+	foreach ($hide AS $param)
+	{
+		if ($post[$param])
+		{
+			$post[$param] = '*****';
+		}
+	}
+
+	$result = $db->escape_string(serialize($post));
+
+	$db->query_write("
+		UPDATE " . TABLE_PREFIX . "apilog
+		SET parampost = '$result'
+		WHERE apilogid = " . $entry['apilogid']
+	);
+
+	$count++;
+	
+	if (!($count%1000))
+	{
+		echo "<br /><center>Processed $count records.</center>";
+		vbflush();
+	}
+}
+
+echo "<br /><center>Processing Complete ($count records).</center>";
+vbflush();
+
+sleep(5);
+]]></installcode>
+		</code>
+	</codes>
+</product>
