@@ -10,1160 +10,561 @@
 || #################################################################### ||
 \*======================================================================*/
 
-// ######################## SET PHP ENVIRONMENT ###########################
+// ####################### SET PHP ENVIRONMENT ###########################
 error_reporting(E_ALL & ~E_NOTICE);
 
-// ##################### DEFINE IMPORTANT CONSTANTS #######################
-define('CVS_REVISION', '$RCSfile$ - $Revision: 92648 $');
+// #################### DEFINE IMPORTANT CONSTANTS #######################
+define('SESSION_BYPASS', 1);
+define('THIS_SCRIPT', 'archive');
 
-// #################### PRE-CACHE TEMPLATES AND DATA ######################
-$phrasegroups = array('cphome');
-$specialtemplates = array('maxloggedin', 'acpstats');
+// ################### PRE-CACHE TEMPLATES AND DATA ######################
+$phrasegroups = array('forum');
+$specialtemplates = array();
 
-// ########################## REQUIRE BACK-END ############################
+// ######################### REQUIRE BACK-END ############################
 require_once('./global.php');
+require_once(DIR . '/includes/functions_bigthree.php');
 
-// #############################################################################
-// ########################### START MAIN SCRIPT ###############################
-// #############################################################################
+// #######################################################################
+// ######################## START MAIN SCRIPT ############################
+// #######################################################################
 
-// ############################## Start build_acpstats_datastore ####################################
-/**
-* Stores a cache of various data for ACP Home Quick Stats into the datastore.
-*/
-function build_acpstats_datastore()
+if (SLASH_METHOD AND strpos($archive_info , '/archive/index.php') === false)
 {
-	global $vbulletin, $starttime, $mysqlversion;
+	exec_header_redirect($vbulletin->options['bburl'] . '/archive/index.php' . $vbulletin->session->vars['sessionurl_q']);
+}
 
-	$data = $vbulletin->db->query_first("SELECT SUM(filesize) AS size FROM " . TABLE_PREFIX . "filedata");
-	$vbulletin->acpstats['attachsize'] = $data['size'];
-	$data = $vbulletin->db->query_first("SELECT SUM(filesize) AS size FROM " . TABLE_PREFIX . "customavatar");
-	$vbulletin->acpstats['avatarsize'] = $data['size'];
-	$data = $vbulletin->db->query_first("SELECT SUM(filesize) AS size FROM " . TABLE_PREFIX . "customprofilepic");
-	$vbulletin->acpstats['profilepicsize'] = $data['size'];
+// parse query string
+$f = 0;
+$p = 0;
+$t = 0;
+$output = '';
 
-	$data = $vbulletin->db->query_first("SELECT COUNT(*) AS count FROM " . TABLE_PREFIX . "user WHERE joindate >= $starttime");
-	$vbulletin->acpstats['newusers'] = $data['count'];
-	$data = $vbulletin->db->query_first("SELECT COUNT(*) AS count FROM " . TABLE_PREFIX . "user WHERE lastactivity >= $starttime");
-	$vbulletin->acpstats['userstoday'] = $data['count'];
 
-	$data = $vbulletin->db->query_first("SELECT COUNT(*) AS count FROM " . TABLE_PREFIX . "post WHERE dateline >= $starttime");
-	$vbulletin->acpstats['newposts'] = $data['count'];
+$endbit = $vbulletin->input->strip_sessionhash($archive_info);
+$endbit = str_replace(array('pda=1', 'login=1', '.html'), '', $endbit);
+$endbit = rtrim($endbit, '&?');
 
-	$vbulletin->acpstats['indexsize'] = 0;
-	$vbulletin->acpstats['datasize'] = 0;
+if (SLASH_METHOD)
+{
+	$endbit = substr(strrchr($endbit, '/') , 1);
+}
+else if (strpos($endbit, '&') !== false)
+{
+	$endbit = substr(strrchr($endbit, '&') , 1);
+}
 
-	$vbulletin->db->hide_errors();
-	$tables = $vbulletin->db->query_write("SHOW TABLE STATUS");
-	$errno = $vbulletin->db->errno;
-	$vbulletin->db->show_errors();
-
-	if (!$errno)
+if ($endbit != '' AND $endbit != 'index.php')
+{
+	$queryparts = explode('-', $endbit);
+	foreach ($queryparts AS $querypart)
 	{
-		while ($table = $vbulletin->db->fetch_array($tables))
+		if ($lastpart != '')
 		{
-			$vbulletin->acpstats['datasize'] += $table['Data_length'];
-			$vbulletin->acpstats['indexsize'] += $table['Index_length'];
-		}
-	}
-
-	if (!$vbulletin->acpstats['indexsize'])
-	{
-		$vbulletin->acpstats['indexsize'] = -1;
-	}
-	if (!$vbulletin->acpstats['datasize'])
-	{
-		$vbulletin->acpstats['datasize'] = -1;
-	}
-	$vbulletin->acpstats['lastupdate'] = TIMENOW;
-	build_datastore('acpstats', serialize($vbulletin->acpstats), 1);
-}
-
-if (!isset($_REQUEST['do']))
-{
-	$_REQUEST['do'] = '';
-}
-
-if (!isset($_POST['do']))
-{
-	$_POST['do'] = '';
-}
-
-if (empty($_REQUEST['do']))
-{
-	log_admin_action();
-}
-
-// #############################################################################
-
-$vbulletin->input->clean_array_gpc('r', array(
-	'redirect' => TYPE_STR,
-	'nojs' 		=> TYPE_BOOL,
-));
-
-// #############################################################################
-// ################################## REDIRECTOR ###############################
-// #############################################################################
-
-if (!empty($vbulletin->GPC['redirect']))
-{
-	require_once(DIR . '/includes/functions_login.php');
-	$redirect = htmlspecialchars_uni(fetch_replaced_session_url($vbulletin->GPC['redirect']));
-	$redirect = create_full_url($redirect);
-	$redirect = preg_replace(
-		array('/&#0*59;?/', '/&#x0*3B;?/i', '#;#'),
-		'%3B',
-		$redirect
-	);
-	$redirect = preg_replace('#&amp%3B#i', '&amp;', $redirect);
-
-	print_cp_header($vbphrase['redirecting_please_wait'], '', "<meta http-equiv=\"Refresh\" content=\"0; URL=$redirect\" />");
-	echo "<p>&nbsp;</p><blockquote><p>$vbphrase[redirecting_please_wait]</p></blockquote>";
-	print_cp_footer();
-	exit;
-}
-
-// #############################################################################
-// ############################### LOG OUT OF CP ###############################
-// #############################################################################
-
-if ($_REQUEST['do'] == 'cplogout')
-{
-	vbsetcookie('cpsession', '', false, true, true);
-	$db->query_write("DELETE FROM " . TABLE_PREFIX . "cpsession WHERE userid = " . $vbulletin->userinfo['userid'] . " AND hash = '" . $db->escape_string($vbulletin->GPC[COOKIE_PREFIX . 'cpsession']) . "'");
-	vbsetcookie('customerid', '', 0);
-	if (!empty($vbulletin->session->vars['sessionurl_js']))
-	{
-		exec_header_redirect('index.php?' . $vbulletin->session->vars['sessionurl_js']);
-	}
-	else
-	{
-		exec_header_redirect('index.php');
-	}
-}
-
-// #############################################################################
-// ################################# SAVE NOTES ################################
-// #############################################################################
-
-if ($_POST['do'] == 'notes')
-{
-	$vbulletin->input->clean_array_gpc('p', array('notes' => TYPE_STR));
-
-	$admindm = datamanager_init('Admin', $vbulletin, ERRTYPE_CP);
-	$admindm->set_existing($vbulletin->userinfo);
-	$admindm->set('notes', $vbulletin->GPC['notes']);
-	$admindm->save();
-	unset($admindm);
-
-	$vbulletin->userinfo['notes'] = htmlspecialchars_uni($vbulletin->GPC['notes']);
-	$_REQUEST['do'] = 'home';
-}
-
-// #############################################################################
-// ################################# HEADER FRAME ##############################
-// #############################################################################
-
-
-if ($_REQUEST['do'] == 'head')
-{
-	ignore_user_abort(true);
-
-	define('IS_NAV_PANEL', true);
-	print_cp_header('', '');
-
-	$forumhomelink = create_full_url(fetch_seo_url('forumhome', array()), true);
-
-	?>
-	<table border="0" width="100%" height="100%">
-	<tr align="center" valign="top">
-		<td style="text-align:<?php echo vB_Template_Runtime::fetchStyleVar('left'); ?>"><b><?php echo $vbphrase['admin_control_panel']; ?></b> (vBulletin <?php echo ADMIN_VERSION_VBULLETIN; ?>)<?php echo iif(is_demo_mode(), ' <b>DEMO MODE</b>'); ?></td>
-		<td style="white-space:nowrap; text-align:<?php echo vB_Template_Runtime::fetchStyleVar('right'); ?>; font-weight:bold">
-			<a href="<?php echo $forumhomelink; ?>" target="_blank"><?php echo $vbphrase['forum_home_page']; ?></a>
-			|
-			<a href="index.php?<?php echo $vbulletin->session->vars['sessionurl']; ?>do=cplogout" onclick="return confirm('<?php echo $vbphrase['sure_you_want_to_log_out_of_cp']; ?>');"  target="_top"><?php echo $vbphrase['log_out']; ?></a>
-		</td>
-	</tr>
-	</table>
-	<?php
-
-	define('NO_CP_COPYRIGHT', true);
-	unset($DEVDEBUG);
-	print_cp_footer();
-
-}
-
-$vbulletin->input->clean_array_gpc('r', array('navprefs' => TYPE_STR));
-$vbulletin->GPC['navprefs'] = preg_replace('#[^a-z0-9_,]#i', '', $vbulletin->GPC['navprefs']);
-
-// #############################################################################
-// ############################### SAVE NAV PREFS ##############################
-// #############################################################################
-
-if ($_REQUEST['do'] == 'navprefs')
-{
-	$vbulletin->input->clean_array_gpc('r', array(
-		'groups'	=> TYPE_STR,
-		'expand'	=> TYPE_BOOL,
-		'navprefs'	=> TYPE_STR
-	));
-
-	$vbulletin->GPC['groups'] = preg_replace('#[^a-z0-9_,]#i', '', $vbulletin->GPC['groups']);
-
-	if ($vbulletin->GPC['expand'])
-	{
-		$groups = explode(',', $vbulletin->GPC['groups']);
-
-		foreach ($groups AS $group)
-		{
-			if (empty($group))
-			{
-				continue;
-			}
-
-			$vbulletin->input->clean_gpc('r', "num$group", TYPE_UINT);
-
-			for ($i = 0; $i < $vbulletin->GPC["num$group"]; $i++)
-			{
-				$vbulletin->GPC['navprefs'][] = $group . "_$i";
-			}
-		}
-
-		$vbulletin->GPC['navprefs'] = implode(',', $vbulletin->GPC['navprefs']);
-	}
-	else
-	{
-		$vbulletin->GPC['navprefs'] = '';
-	}
-
-	$vbulletin->GPC['navprefs'] = preg_replace('#[^a-z0-9_,]#i', '', $vbulletin->GPC['navprefs']);
-
-	$_REQUEST['do'] = 'savenavprefs';
-}
-
-if ($_REQUEST['do'] == 'buildbitfields')
-{
-	require_once(DIR . '/includes/class_bitfield_builder.php');
-	vB_Bitfield_Builder::save($db);
-	build_forum_permissions();
-
-	define('CP_REDIRECT', 'index.php');
-	print_stop_message('rebuilt_bitfields_successfully');
-
-}
-
-if ($_REQUEST['do'] == 'buildvideo')
-{
-	require_once(DIR . '/includes/functions_databuild.php');
-	build_bbcode_video();
-
-	print_cp_header();
-	require_once(DIR . '/includes/adminfunctions_template.php');
-	build_all_styles(0, 0, '', false, 'standard');
-	build_all_styles(0, 0, '', false, 'mobile');
-
-	define('CP_REDIRECT', 'index.php');
-	print_stop_message('rebuilt_video_bbcodes_successfully');
-}
-
-if ($_REQUEST['do'] == 'buildnavprefs')
-{
-	$vbulletin->input->clean_array_gpc('r', array(
-		'prefs' 	=> TYPE_STR,
-		'dowhat'	=> TYPE_STR,
-		'id'		=> TYPE_INT
-	));
-
-	$vbulletin->GPC['prefs'] = preg_replace('#[^a-z0-9_,]#i', '', $vbulletin->GPC['prefs']);
-	$_tmp = preg_split('#,#', $vbulletin->GPC['prefs'], -1, PREG_SPLIT_NO_EMPTY);
-	$_navprefs = array();
-
-	foreach ($_tmp AS $_val)
-	{
-		$_navprefs["$_val"] = $_val;
-	}
-	unset($_tmp);
-
-	if ($vbulletin->GPC['dowhat'] == 'collapse')
-	{
-		// remove an item from the list
-		unset($_navprefs[$vbulletin->GPC['id']]);
-	}
-	else
-	{
-		// add an item to the list
-		$_navprefs[$vbulletin->GPC['id']] = $vbulletin->GPC['id'];
-		ksort($_navprefs);
-	}
-
-	$vbulletin->GPC['navprefs'] = implode(',', $_navprefs);
-	$_REQUEST['do'] = 'savenavprefs';
-}
-
-if ($_REQUEST['do'] == 'savenavprefs')
-{
-	$admindm = datamanager_init('Admin', $vbulletin, ERRTYPE_CP);
-	$admindm->set_existing($vbulletin->userinfo);
-	$admindm->set('navprefs', $vbulletin->GPC['navprefs']);
-	$admindm->save();
-	unset($admindm);
-
-	$_NAVPREFS = preg_split('#,#', $vbulletin->GPC['navprefs'], -1, PREG_SPLIT_NO_EMPTY);
-	$_REQUEST['do'] = 'nav';
-}
-
-// ################################ NAVIGATION FRAME #############################
-
-if ($_REQUEST['do'] == 'nav')
-{
-	require_once(DIR . '/includes/adminfunctions_navpanel.php');
-	print_cp_header();
-
-	echo "\n<div>";
-	?><img src="../cpstyles/<?php echo $vbulletin->options['cpstylefolder']; ?>/cp_logo.gif" title="<?php echo $vbphrase['admin_control_panel']; ?>" alt="" border="0" hspace="4" vspace="4" /><?php
-	echo "</div>\n\n" . iif(is_demo_mode(), "<div align=\"center\"><b>DEMO MODE</b></div>\n\n") . "<div style=\"width:168px; padding: 4px\">\n";
-
-	// cache nav prefs
-	can_administer();
-	construct_nav_spacer();
-
-	$navigation = array(); // [displayorder][phrase/text] = array([group], [options][disporder][])
-
-	require_once(DIR . '/includes/class_xml.php');
-
-	$navfiles = array();
-	if ($handle = @opendir(DIR . '/includes/xml/'))
-	{
-		while (($file = readdir($handle)) !== false)
-		{
-			if (!preg_match('#^cpnav_(.*).xml$#i', $file, $matches))
-			{
-				continue;
-			}
-			$nav_key = preg_replace('#[^a-z0-9]#i', '', $matches[1]);
-			$navfiles["$nav_key"] = $file;
-		}
-		closedir($handle);
-	}
-
-	if (empty($navfiles['vbulletin']))	// opendir failed or cpnav_vbulletin.xml is missing
-	{
-		if (is_readable(DIR . '/includes/xml/cpnav_vbulletin.xml'))
-		{
-			$navfiles['vbulletin'] = 'cpnav_vbulletin.xml';
+			// can be:
+			// f: forumid
+			// p: pagenumber
+			// t: threadid
+			$$lastpart = $querypart;
+			$lastpart = '';
 		}
 		else
 		{
-			echo construct_phrase($vbphrase['could_not_open_x'], DIR . '/includes/xml/cpnav_vbulletin.xml');
-			exit;
-		}
-	}
-
-	foreach ($navfiles AS $nav_file => $file)
-	{
-		$xmlobj = new vB_XML_Parser(false, DIR . "/includes/xml/$file");
-		$xml = $xmlobj->parse();
-
-		if ($xml['product'] AND empty($vbulletin->products["$xml[product]"]))
-		{
-			// attached to a specific product and that product isn't enabled
-			continue;
-		}
-
-		if (!is_array($xml['navgroup'][0]))
-		{
-			$xml['navgroup'] = array($xml['navgroup']);
-		}
-
-		foreach ($xml['navgroup'] AS $navgroup)
-		{
-			if (!empty($navgroup['debug']) AND $vbulletin->debug != 1)
+			switch ($querypart)
 			{
-				continue;
-			}
-
-			// do we have access to this group
-			if (empty($navgroup['permissions']) OR call_user_func_array("can_administer", explode(',', $navgroup['permissions'])))
-			{
-				$group_displayorder = intval($navgroup['displayorder']);
-				$group_key = fetch_nav_text($navgroup);
-
-				if (!isset($navigation["$group_displayorder"]["$group_key"]))
-				{
-					$navigation["$group_displayorder"]["$group_key"] = array('options' => array());
-				}
-				$local_options =& $navigation["$group_displayorder"]["$group_key"]['options'];
-
-				if (!is_array($navgroup['navoption'][0]))
-				{
-					$navgroup['navoption'] = array($navgroup['navoption']);
-				}
-				foreach ($navgroup['navoption'] AS $navoption)
-				{
-					if (
-						(!empty($navoption['debug']) AND $vbulletin->debug != 1)
-							OR
-						(!empty($navoption['permissions']) AND !can_administer($navoption['permissions']))
-					)
-					{
-						continue;
-					}
-
-					$navoption['link'] = str_replace(
-						array(
-							'{$vbulletin->config[Misc][modcpdir]}',
-							'{$vbulletin->config[Misc][admincpdir]}'
-						),
-						array($vbulletin->config['Misc']['modcpdir'], $vbulletin->config['Misc']['admincpdir']),
-						$navoption['link']
-					);
-
-					$navoption['text'] = fetch_nav_text($navoption);
-
-					$local_options[intval($navoption['displayorder'])]["$navoption[text]"] = $navoption;
-				}
-
-				if (!isset($navigation["$group_displayorder"]["$group_key"]['group']) OR $xml['master'])
-				{
-					unset($navgroup['navoption']);
-					$navgroup['nav_file'] = $nav_file;
-					$navgroup['text'] = $group_key;
-
-					$navigation["$group_displayorder"]["$group_key"]['group'] = $navgroup;
-				}
-			}
-		}
-
-		$xmlobj = null;
-		unset($xml);
-	}
-
-	($hook = vBulletinHook::fetch_hook('admin_index_navigation')) ? eval($hook) : false;
-
-	// sort groups by display order
-	ksort($navigation);
-	foreach ($navigation AS $group_keys)
-	{
-		foreach ($group_keys AS $group_key => $navgroup_holder)
-		{
-			// sort options by display order
-			ksort($navgroup_holder['options']);
-
-			foreach ($navgroup_holder['options'] AS $navoption_holder)
-			{
-				foreach ($navoption_holder AS $navoption)
-				{
-					construct_nav_option($navoption['text'], $navoption['link']);
-				}
-			}
-
-			// have all the options, so do the group
-			construct_nav_group($navgroup_holder['group']['text'], $navgroup_holder['group']['nav_file']);
-
-			if (isset($navgroup_holder['group']['hr']) AND $navgroup_holder['group']['hr'] == 'true')
-			{
-				construct_nav_spacer();
+				case 'f':
+				case 'p':
+				case 't':
+					$lastpart = $querypart;
+					break;
+				default:
+					$lastpart = '';
 			}
 		}
 	}
-
-	print_nav_panel();
-
-	unset($navigation);
-
-	echo "</div>\n";
-	// *************************************************
-
-	define('NO_CP_COPYRIGHT', true);
-	unset($DEVDEBUG);
-	print_cp_footer();
-
+}
+else
+{
+	$do = 'index';
 }
 
-// #############################################################################
-// ################################ BUILD FRAMESET #############################
-// #############################################################################
+$vbulletin->input->clean_array_gpc('r', array(
+	'pda'     => TYPE_BOOL,
+	'login'   => TYPE_BOOL,
+	'message' => TYPE_BOOL
+));
 
-if ($_REQUEST['do'] == 'frames' OR empty($_REQUEST['do']))
+$vbulletin->input->clean_array_gpc('c', array(
+	COOKIE_PREFIX . 'pda' => TYPE_UINT
+));
+
+$vbulletin->input->clean_array_gpc('p', array(
+	'username' => TYPE_STR,
+	'password' => TYPE_STR,
+));
+
+// check to see if the person is using a PDA if so we'll sort in ASC
+// force a redirect afterwards so we dont get problems with search engines
+if ($t)
 {
-	$vbulletin->input->clean_array_gpc('r', array(
-		'loc' 		=> TYPE_NOHTML
-	));
+	$t = intval($t);
+	$querystring = 't-' . $t . iif($p, '-p-' . intval($p)) . '.html';
+}
+else if ($f)
+{
+	$f = intval($f);
+	$querystring = 'f-' . $f . iif($p, '-p-' . intval($p)) . '.html';
+}
 
-	$navframe = "<frame src=\"index.php?" . $vbulletin->session->vars['sessionurl'] . "do=nav" . iif($vbulletin->GPC['nojs'], '&amp;nojs=1') . "\" name=\"nav\" scrolling=\"yes\" frameborder=\"0\" marginwidth=\"0\" marginheight=\"0\" border=\"no\" />\n";
-	$headframe = "<frame src=\"index.php?" . $vbulletin->session->vars['sessionurl'] . "do=head\" name=\"head\" scrolling=\"no\" noresize=\"noresize\" frameborder=\"0\" marginwidth=\"10\" marginheight=\"0\" border=\"no\" />\n";
-	$mainframe = "<frame src=\"" . iif(!empty($vbulletin->GPC['loc']) AND !preg_match('#^[a-z]+:#i', $vbulletin->GPC['loc']), create_full_url($vbulletin->GPC['loc']), "index.php?" . $vbulletin->session->vars['sessionurl'] . "do=home") . "\" name=\"main\" scrolling=\"yes\" frameborder=\"0\" marginwidth=\"10\" marginheight=\"10\" border=\"no\" />\n";
+if ($vbulletin->GPC['pda'])
+{
+	vbsetcookie('pda', '1', 1);
 
-	?>
-	<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Frameset//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd">
-	<html xmlns="http://www.w3.org/1999/xhtml" dir="<?php echo vB_Template_Runtime::fetchStyleVar('textdirection'); ?>" lang="<?php echo vB_Template_Runtime::fetchStyleVar('languagecode'); ?>">
-	<head>
-	<script type="text/javascript">
-	<!--
-	// get out of any containing frameset
-	if (self.parent.frames.length != 0)
+	$redirect_url = $vbulletin->options['bburl'] . '/archive/index.php';
+	if ($querystring)
 	{
-		self.parent.location.replace(document.location.href);
-	}
-	// -->
-	</script>
-	<title><?php echo $vbulletin->options['bbtitle'] . ' ' . $vbphrase['admin_control_panel']; ?></title>
-	</head>
-
-	<?php
-
-	if (vB_Template_Runtime::fetchStyleVar('textdirection') == 'ltr')
-	{
-	// left-to-right frameset
-	?>
-	<frameset cols="195,*"  framespacing="0" border="0" frameborder="0" frameborder="no" border="0">
-		<?php echo $navframe; ?>
-		<frameset rows="20,*"  framespacing="0" border="0" frameborder="0" frameborder="no" border="0">
-			<?php echo $headframe; ?>
-			<?php echo $mainframe; ?>
-		</frameset>
-	</frameset>
-	<?php
+		$redirect_url .= (SLASH_METHOD ? '/' : '?') . $querystring . ARCHIVE_SESSION_URL;
 	}
 	else
 	{
-	// right-to-left frameset
-	?>
-	<frameset cols="*,195"  framespacing="0" border="0" frameborder="0" frameborder="no" border="0">
-		<frameset rows="20,*"  framespacing="0" border="0" frameborder="0" frameborder="no" border="0">
-			<?php echo $headframe; ?>
-			<?php echo $mainframe; ?>
-		</frameset>
-		<?php echo $navframe; ?>
-	</frameset>
-	<?php
+		$redirect_url .= $vbulletin->session->vars['sessionurl_q'];
 	}
-
-	?>
-
-	<noframes>
-		<body>
-			<p><?php echo $vbphrase['no_frames_support']; ?></p>
-		</body>
-	</noframes>
-	</html>
-	<?php
+	exec_header_redirect($redirect_url);
+}
+else if ($vbulletin->GPC[COOKIE_PREFIX . 'pda'])
+{
+	$pda = true;
 }
 
-// ################################ MAIN FRAME #############################
+$title = $vbulletin->options['bbtitle'];
 
-if ($_REQUEST['do'] == 'home')
+if ($vbulletin->userinfo['userid'] == 0 AND $vbulletin->GPC['login'])
 {
-
-$vbulletin->input->clean_array_gpc('r', array('showallnews' => TYPE_BOOL));
-
-print_cp_header($vbphrase['welcome_to_the_vbulletin_admin_control_panel']);
-
-// Warn admin if admincpdir setting doesn't match the admincp directory
-if (!empty($_SERVER['SCRIPT_NAME']))
-{
-	$admincppath = dirname($_SERVER['SCRIPT_NAME']);
-	if (strpos($admincppath, '/') !== false)
+	if (!empty($vbulletin->GPC['username']) AND !empty($vbulletin->GPC['password']))
 	{
-		$admincppath = strrchr($admincppath, '/');
-	}
-	$admincppath = trim($admincppath, '/');
-	if ($admincppath != $vbulletin->config['Misc']['admincpdir'])
-	{
-		print_table_start();
-		print_description_row(construct_phrase($vbphrase['admincpdir_mismatch'], htmlspecialchars_uni($admincppath), htmlspecialchars_uni($vbulletin->config['Misc']['admincpdir'])));
-		print_table_footer(2, '', '', false);
-	}
-	unset($admincppath);
-}
-
-$news_rows = array();
-
-// check if a PHP optimizer with known issues is installed
-if (($err = verify_optimizer_environment()) !== true)
-{
-	ob_start();
-	print_description_row($vbphrase['problematic_php_optimizer_found'], false, 2, 'thead');
-	print_description_row('<div class="smallfont">' . $vbphrase["$err"] . '</div>');
-	$news_rows['php_optimizer'] = ob_get_clean();
-}
-
-// look for incomplete admin messages that may have actually been independently completed
-// and say they're done
-$donemessages_result = $db->query_read("
-	SELECT adminmessage.adminmessageid
-	FROM " . TABLE_PREFIX . "adminmessage AS adminmessage
-	INNER JOIN " . TABLE_PREFIX . "adminlog AS adminlog ON (adminlog.script = adminmessage.script AND adminlog.action = adminmessage.action)
-	WHERE adminmessage.status = 'undone'
-		AND adminmessage.script <> ''
-		AND adminlog.dateline > adminmessage.dateline
-	GROUP BY adminmessage.adminmessageid
-");
-while ($donemessage = $db->fetch_array($donemessages_result))
-{
-	$db->query_write("
-		UPDATE " . TABLE_PREFIX . "adminmessage
-		SET status = 'done'
-		WHERE adminmessageid = " . intval($donemessage['adminmessageid']) . "
-	");
-}
-
-// let's look for any messages that we need to display to the admin
-$adminmessages_result = $db->query_read("
-	SELECT *
-	FROM " . TABLE_PREFIX . "adminmessage
-	WHERE status = 'undone'
-	ORDER BY dateline
-");
-if ($db->num_rows($adminmessages_result))
-{
-	ob_start();
-	while ($adminmessage = $db->fetch_array($adminmessages_result))
-	{
-		$buttons = '';
-		if ($adminmessage['execurl'])
-		{
-			$buttons .= '<input type="submit" name="address[' . $adminmessage['adminmessageid'] .']" value="' . $vbphrase['address'] . '" class="button" />';
+		require_once(DIR . '/includes/functions_login.php');
+		$strikes = verify_strike_status($vbulletin->GPC['username'], true);
+		if ($strikes === false)
+		{ // user has got too many wrong passwords
+			$error_message = fetch_error('strikes', $vbulletin->options['bburl'], $vbulletin->session->vars['sessionurl']);
+			$do = 'error';
 		}
-		if ($adminmessage['dismissable'] OR !$adminmessage['execurl'])
+		else if (verify_authentication($vbulletin->GPC['username'], $vbulletin->GPC['password'], '', '', false, true))
 		{
-			$buttons .= ' <input type="submit" name="dismiss[' . $adminmessage['adminmessageid'] .']" value="' . $vbphrase['dismiss'] . '" class="button" />';
-		}
+			exec_unstrike_user($vbulletin->GPC['username']);
 
-		$args = vb_unserialize($adminmessage['args']);
-		print_description_row("<div style=\"float: right\">$buttons</div><div>" . $vbphrase['admin_attention_required'] . "</div>", false, 2, 'thead');
-		print_description_row(
-			'<div class="smallfont">' . fetch_error($adminmessage['varname'], $args) . "</div>"
-		);
-	}
-	$news_rows['admin_messages'] = ob_get_clean();
-}
+			$db->query_write("DELETE FROM " . TABLE_PREFIX . "session WHERE sessionhash = '" . $db->escape_string($vbulletin->session->vars['dbsessionhash']) . "'");
 
-if (can_administer('canadminstyles'))
-{
-	// before the quick stats, display the number of templates that need updating
-	require_once(DIR . '/includes/adminfunctions_template.php');
+			$vbulletin->session->vars = $vbulletin->session->fetch_session($vbulletin->userinfo['userid']);
 
-	$need_updates = fetch_changed_templates_count();
-	if ($need_updates)
-	{
-		ob_start();
-		print_description_row($vbphrase['out_of_date_custom_templates_found'], false, 2, 'thead');
-		print_description_row(construct_phrase(
-			'<div class="smallfont">' .  $vbphrase['currently_x_customized_templates_updated'] . '</div>',
-			$need_updates,
-			$vbulletin->session->vars['sessionurl']
-		));
-		$news_rows['new_version'] = ob_get_clean();
-	}
-}
-
-echo '<div id="admin_news"' . (empty($news_rows) ? ' style="display: none;"' : '') . '>';
-if (!empty($news_rows))
-{
-	print_form_header('index', 'handlemessage', false, true, 'news');
-	print_table_header($vbphrase['news_header_string']);
-
-	echo $news_rows['new_version'];
-	echo $news_rows['php_optimizer'];
-	echo $news_rows['sql_strict'];
-	echo $news_rows['admin_messages'];
-
-	print_table_footer();
-}
-else
-{
-	print_form_header('index', 'handlemessage', false, true, 'news');
-	print_table_header($vbphrase['news_header_string']);
-	print_table_footer();
-}
-echo '</div>'; // end of <div id="admin_news">
-
-// *******************************
-// Admin Quick Stats -- Toggable via the CP
-$starttime = mktime(0, 0, 0, date('m'), date('d'), date('Y'));
-
-$mysqlversion = $db->query_first("SELECT VERSION() AS version");
-
-if ($vbulletin->options['adminquickstats'])
-{
-	if ($vbulletin->acpstats['lastupdate'] < (TIMENOW - 3600))
-	{
-		build_acpstats_datastore();
-	}
-
-	// An index exists on dateline for thread marking so we can run this on each page load.
-	$newthreads = $db->query_first("
-		SELECT COUNT(*) AS count
-		FROM " . TABLE_PREFIX . "thread
-		WHERE visible IN (0,1,2)
-			AND sticky IN (0,1)
-			AND open <> 10
-			AND dateline >= $starttime
-	");
-
-	if ($vbulletin->acpstats['datasize'] == -1)
-	{
-		$vbulletin->acpstats['datasize'] = $vbphrase['n_a'];
-	}
-	if ($vbulletin->acpstats['indexsize'] == -1)
-	{
-		$vbulletin->acpstats['indexsize'] = $vbphrase['n_a'];
-	}
-}
-
-$db->hide_errors();
-if ($variables = $db->query_first("SHOW VARIABLES LIKE 'max_allowed_packet'"))
-{
-	$maxpacket = $variables['Value'];
-}
-else
-{
-	$maxpacket = $vbphrase['n_a'];
-}
-$db->show_errors();
-
-if (preg_match('#(Apache)/([0-9\.]+)\s#siU', $_SERVER['SERVER_SOFTWARE'], $wsregs))
-{
-	$webserver = "$wsregs[1] v$wsregs[2]";
-	if (SAPI_NAME == 'cgi' OR SAPI_NAME == 'cgi-fcgi')
-	{
-		$addsapi = true;
-	}
-}
-else if (preg_match('#Microsoft-IIS/([0-9\.]+)#siU', $_SERVER['SERVER_SOFTWARE'], $wsregs))
-{
-	$webserver = "IIS v$wsregs[1]";
-	$addsapi = true;
-}
-else if (preg_match('#Zeus/([0-9\.]+)#siU', $_SERVER['SERVER_SOFTWARE'], $wsregs))
-{
-	$webserver = "Zeus v$wsregs[1]";
-	$addsapi = true;
-}
-else if (strtoupper($_SERVER['SERVER_SOFTWARE']) == 'APACHE')
-{
-	$webserver = 'Apache';
-	if (SAPI_NAME == 'cgi' OR SAPI_NAME == 'cgi-fcgi')
-	{
-		$addsapi = true;
-	}
-}
-else
-{
-	$webserver = SAPI_NAME;
-}
-
-if (!empty($addsapi))
-{
-	$webserver .= ' (' . SAPI_NAME . ')';
-}
-
-$serverinfo = SAFEMODE ? "<br />$vbphrase[safe_mode]" : '';
-$serverinfo .= (ini_get('file_uploads') == 0 OR strtolower(ini_get('file_uploads')) == 'off') ? "<br />$vbphrase[file_uploads_disabled]" : '';
-
-$memorylimit = ini_get('memory_limit');
-
-// ###### Users to Moderate
-$waiting = $db->query_first("SELECT COUNT(*) AS users FROM " . TABLE_PREFIX . "user WHERE usergroupid = 4");
-
-// ##### Attachments to Moderate
-$attachcount = $db->query_first("
-	SELECT COUNT(*) AS count
-	FROM " . TABLE_PREFIX . "attachment AS attachment
-	###INNER JOIN " . TABLE_PREFIX . "post AS post USING (postid)###
-	WHERE attachment.state = 'moderation' AND contentid <> 0
-");
-
-// ##### Events to Moderate
-$eventcount = $db->query_first("
-	SELECT COUNT(*) AS count
-	FROM " . TABLE_PREFIX . "event AS event
-	INNER JOIN " . TABLE_PREFIX ."calendar AS calendar USING (calendarid)
-	WHERE event.visible = 0
-");
-
-// ##### Posts to Moderate
-$postcount = $db->query_first("
-	SELECT COUNT(*) AS count
-	FROM " . TABLE_PREFIX . "moderation AS moderation
-	INNER JOIN " . TABLE_PREFIX . "post AS post ON (post.postid = moderation.primaryid)
-	WHERE moderation.type = 'reply'
-");
-
-// ##### Threads to Moderate
-$threadcount = $db->query_first("
-	SELECT COUNT(*) AS count
-	FROM " . TABLE_PREFIX . "moderation AS moderation
-	INNER JOIN " . TABLE_PREFIX . "thread AS thread ON (thread.threadid = moderation.primaryid)
-	WHERE moderation.type = 'thread'
-");
-
-// ##### Messages to Moderate
-$messagecount = $db->query_first("
-	SELECT COUNT(*) AS count
-	FROM " . TABLE_PREFIX . "moderation AS moderation
-	INNER JOIN " . TABLE_PREFIX . "visitormessage AS visitormessage ON (visitormessage.vmid = moderation.primaryid)
-	WHERE moderation.type = 'visitormessage'
-");
-
-$mailqueue = $vbulletin->db->query_first("
-	SELECT COUNT(mailqueueid) AS queued FROM " . TABLE_PREFIX . "mailqueue
-");
-
-print_form_header('index', 'home');
-if ($vbulletin->options['adminquickstats'])
-{
-	print_table_header($vbphrase['welcome_to_the_vbulletin_admin_control_panel'], 6);
-	print_cells_row(array(
-		$vbphrase['server_type'], PHP_OS . $serverinfo,
-		$vbphrase['database_data_usage'], vb_number_format($vbulletin->acpstats['datasize'], 2, true),
-		$vbphrase['users_awaiting_moderation'], vb_number_format($waiting['users']) . ' ' . construct_link_code($vbphrase['view'], "user.php?" . $vbulletin->session->vars['sessionurl'] . "do=moderate"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['web_server'], $webserver,
-		$vbphrase['database_index_usage'], vb_number_format($vbulletin->acpstats['indexsize'], 2, true),
-		$vbphrase['threads_awaiting_moderation'], vb_number_format($threadcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=posts"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		'PHP', PHP_VERSION,
-		$vbphrase['attachment_usage'], vb_number_format($vbulletin->acpstats['attachsize'], 2, true),
-		$vbphrase['posts_awaiting_moderation'], vb_number_format($postcount['count']) . ' ' . construct_link_code($vbphrase['view'],'../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=posts#postlist"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_max_post_size'], ($postmaxsize = ini_get('post_max_size')) ? vb_number_format($postmaxsize, 2, true) : $vbphrase['n_a'],
-		$vbphrase['custom_avatar_usage'], vb_number_format($vbulletin->acpstats['avatarsize'], 2, true),
-		$vbphrase['attachments_awaiting_moderation'], vb_number_format($attachcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=attachments"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_max_upload_size'], ($postmaxuploadsize = ini_get('upload_max_filesize')) ? vb_number_format($postmaxuploadsize, 2, true) : $vbphrase['n_a'],
-		$vbphrase['custom_profile_picture_usage'], vb_number_format($vbulletin->acpstats['profilepicsize'], 2, true),
-		$vbphrase['events_awaiting_moderation'], vb_number_format($eventcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=events"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_memory_limit'], ($memorylimit AND $memorylimit != '-1') ? vb_number_format($memorylimit, 2, true) : $vbphrase['none'],
-		$vbphrase['unique_registered_visitors_today'], vb_number_format($vbulletin->acpstats['userstoday']),
-		$vbphrase['messages_awaiting_moderation'], vb_number_format($messagecount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=messages"),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['mysql_version'], $mysqlversion['version'],
-		$vbphrase['new_users_today'], vb_number_format($vbulletin->acpstats['newusers']),
-		$vbphrase['new_threads_today'], vb_number_format($newthreads['count']),
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['mysql_max_packet_size'], vb_number_format($maxpacket, 2, 1),
-		$vbphrase['new_posts_today'], vb_number_format($vbulletin->acpstats['newposts']),
-	$vbphrase['queued_emails'], vb_number_format($mailqueue['queued'])
-	), 0, 0, -5, 'top', 1, 1);
-}
-else
-{
-	print_table_header($vbphrase['welcome_to_the_vbulletin_admin_control_panel'], 4);
-	print_cells_row(array(
-		$vbphrase['server_type'], PHP_OS . $serverinfo,
-		$vbphrase['users_awaiting_moderation'], vb_number_format($waiting['users']) . ' ' . construct_link_code($vbphrase['view'], "user.php?" . $vbulletin->session->vars['sessionurl'] . "do=moderate")
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['web_server'], $webserver,
-		$vbphrase['threads_awaiting_moderation'], vb_number_format($threadcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=posts")
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		'PHP', PHP_VERSION,
-		$vbphrase['posts_awaiting_moderation'], vb_number_format($postcount['count']) . ' ' . construct_link_code($vbphrase['view'],'../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=posts#postlist")
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_max_post_size'], ($postmaxsize = ini_get('post_max_size')) ? vb_number_format($postmaxsize, 2, true) : $vbphrase['n_a'],
-		$vbphrase['attachments_awaiting_moderation'], vb_number_format($attachcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=attachments")
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_max_upload_size'], ($postmaxuploadsize = ini_get('upload_max_filesize')) ? vb_number_format($postmaxuploadsize, 2, true) : $vbphrase['n_a'],
-		$vbphrase['events_awaiting_moderation'], vb_number_format($eventcount['count']) . ' ' . construct_link_code($vbphrase['view'], '../' . $vbulletin->config['Misc']['modcpdir'] . '/moderate.php?' . $vbulletin->session->vars['sessionurl'] . "do=events")
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['php_memory_limit'], ($memorylimit AND $memorylimit != '-1') ? vb_number_format($memorylimit, 2, true) : $vbphrase['none'],
-	$vbphrase['queued_emails'], vb_number_format($mailqueue['queued'])
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array(
-		$vbphrase['mysql_version'], $mysqlversion['version'],
-		'&nbsp;', '&nbsp;'
-	), 0, 0, -5, 'top', 1, 1);
-	print_cells_row(array($vbphrase['mysql_max_packet_size'], vb_number_format($maxpacket, 2, 1),
-		'&nbsp;', '&nbsp;'
-	), 0, 0, -5, 'top', 1, 1);
-}
-
-print_table_footer();
-($hook = vBulletinHook::fetch_hook('admin_index_main1')) ? eval($hook) : false;
-
-// *************************************
-// Administrator Notes
-
-print_form_header('index', 'notes');
-print_table_header($vbphrase['administrator_notes'], 1);
-print_description_row("<textarea name=\"notes\" style=\"width: 90%\" rows=\"9\" tabindex=\"1\">" . $vbulletin->userinfo['notes'] . "</textarea>", false, 1, '', 'center');
-print_submit_row($vbphrase['save'], 0, 1);
-
-($hook = vBulletinHook::fetch_hook('admin_index_main2')) ? eval($hook) : false;
-
-// *************************************
-// QUICK ADMIN LINKS
-
-print_table_start();
-print_table_header($vbphrase['quick_administrator_links']);
-
-$datecut = TIMENOW - $vbulletin->options['cookietimeout'];
-$guestsarry = $db->query_first("SELECT COUNT(host) AS sessions FROM " . TABLE_PREFIX . "session WHERE userid = 0 AND lastactivity > $datecut");
-$membersarry = $db->query_read("SELECT DISTINCT userid FROM " . TABLE_PREFIX . "session WHERE userid <> 0 AND lastactivity > $datecut");
-$guests = intval($guestsarry['sessions']);
-$members = intval($db->num_rows($membersarry));
-
-// ### MAX LOGGEDIN USERS ################################
-if (intval($vbulletin->maxloggedin['maxonline']) <= ($guests + $members))
-{
-	$vbulletin->maxloggedin['maxonline'] = $guests + $members;
-	$vbulletin->maxloggedin['maxonlinedate'] = TIMENOW;
-	build_datastore('maxloggedin', serialize($vbulletin->maxloggedin), 1);
-}
-
-$is_windows = (strtoupper(substr(PHP_OS, 0, 3)) == 'WIN');
-$loadavg = array();
-
-if (!$is_windows AND function_exists('exec') AND $stats = @exec('uptime 2>&1') AND trim($stats) != '' AND preg_match('#: ([\d.,]+),?\s+([\d.,]+),?\s+([\d.,]+)$#', $stats, $regs))
-{
-	$loadavg[0] = vb_number_format($regs[1], 2);
-	$loadavg[1] = vb_number_format($regs[2], 2);
-	$loadavg[2] = vb_number_format($regs[3], 2);
-}
-else if (!$is_windows AND @file_exists('/proc/loadavg') AND $stats = @file_get_contents('/proc/loadavg') AND trim($stats) != '')
-{
-	$loadavg = explode(' ', $stats);
-	$loadavg[0] = vb_number_format($loadavg[0], 2);
-	$loadavg[1] = vb_number_format($loadavg[1], 2);
-	$loadavg[2] = vb_number_format($loadavg[2], 2);
-}
-
-if (!empty($loadavg))
-{
-	print_label_row($vbphrase['server_load_averages'], "$loadavg[0]&nbsp;&nbsp;$loadavg[1]&nbsp;&nbsp;$loadavg[2] | " . construct_phrase($vbphrase['users_online_x_members_y_guests'], vb_number_format($guests + $members), vb_number_format($members), vb_number_format($guests)), '', 'top', NULL, false);
-}
-else
-{
-	print_label_row($vbphrase['users_online'], construct_phrase($vbphrase['x_y_members_z_guests'], vb_number_format($guests + $members), vb_number_format($members), vb_number_format($guests)), '', 'top', NULL, false);
-}
-
-if (can_administer('canadminusers'))
-{
-	print_label_row($vbphrase['quick_user_finder'], '
-		<form action="user.php?do=find" method="post" style="display:inline">
-		<input type="hidden" name="s" value="' . $vbulletin->session->vars['sessionhash'] . '" />
-		<input type="hidden" name="adminhash" value="' . ADMINHASH . '" />
-		<input type="hidden" name="do" value="find" />
-		<input type="text" class="bginput" name="user[username]" size="30" tabindex="1" />
-		<input type="submit" value=" ' . $vbphrase['find'] . ' " class="button" tabindex="1" />
-		<input type="submit" class="button" value="' . $vbphrase['exact_match'] . '" tabindex="1" name="user[exact]" />
-		</form>
-		', '', 'top', NULL, false
-	);
-}
-
-print_label_row($vbphrase['quick_phrase_finder'], '
-	<form action="phrase.php?do=dosearch" method="post" style="display:inline">
-	<input type="text" class="bginput" name="searchstring" size="30" tabindex="1" />
-	<input type="submit" value=" ' . $vbphrase['find'] . ' " class="button" tabindex="1" />
-	<input type="hidden" name="do" value="dosearch" />
-	<input type="hidden" name="languageid" value="-10" />
-	<input type="hidden" name="searchwhere" value="10" />
-	<input type="hidden" name="adminhash" value="' . ADMINHASH . '" />
-	</form>
-	', '', 'top', NULL, false
-);
-
-print_label_row($vbphrase['php_function_lookup'], '
-	<form action="//www.ph' . 'p.net/manual-lookup.ph' . 'p" method="get" style="display:inline">
-	<input type="text" class="bginput" name="function" size="30" tabindex="1" />
-	<input type="submit" value=" ' . $vbphrase['find'] . ' " class="button" tabindex="1" />
-	</form>
-	', '', 'top', NULL, false
-);
-print_label_row($vbphrase['mysql_language_lookup'], '
-	<form action="//www.mysql.com/search/" method="get" style="display:inline">
-	<input type="hidden" name="doc" value="1" />
-	<input type="hidden" name="m" value="o" />
-	<input type="text" class="bginput" name="q" size="30" tabindex="1" />
-	<input type="submit" value=" ' . $vbphrase['find'] . ' " class="button" tabindex="1" />
-	</form>
-	', '', 'top', NULL, false
-);
-print_label_row($vbphrase['useful_links'], '
-	<form style="display:inline">
-	<select onchange="if (this.options[this.selectedIndex].value != \'\') { window.open(this.options[this.selectedIndex].value); } return false;" tabindex="1" class="bginput">
-		<option value="">-- ' . $vbphrase['useful_links'] . ' --</option>' . construct_select_options(array(
-			'PHP' => array(
-				'https://www.ph' . 'p.net/' => $vbphrase['home_page'] . ' (PHP.net)',
-				'https://www.ph' . 'p.net/manual/' => $vbphrase['reference_manual'],
-				'https://www.ph' . 'p.net/downloads.ph' . 'p' => $vbphrase['download_latest_version']
-			),
-			'MySQL' => array(
-				'https://www.mysql.com/' => $vbphrase['home_page'] . ' (MySQL.com)',
-				'https://www.mysql.com/documentation/' => $vbphrase['reference_manual'],
-				'https://www.mysql.com/downloads/' => $vbphrase['download_latest_version'],
-			),
-			'Apache' => array(
-				'https://httpd.apache.org/' => $vbphrase['home_page'] . ' (Apache.org)',
-				'https://httpd.apache.org/docs/' => $vbphrase['reference_manual'],
-				'https://httpd.apache.org/download.cgi' => $vbphrase['download_latest_version'],
-			),
-	)) . '</select>
-	</form>
-	', '', 'top', NULL, false
-);
-print_table_footer(2, '', '', false);
-
-($hook = vBulletinHook::fetch_hook('admin_index_main3')) ? eval($hook) : false;
-
-// *************************************
-// vBULLETIN CREDITS
-require_once(DIR . '/includes/vbulletin_credits.php');
-
-?>
-
-<p class="smallfont" align="center">
-<!--<?php echo construct_phrase($vbphrase['vbulletin_copyright'], $vbulletin->options['templateversion'], date('Y')); ?><br />-->
-</p>
-
-<?php
-
-unset($DEVDEBUG);
-
-
-print_cp_footer();
-
-}
-
-// ################################ SHOW PHP INFO #############################
-
-if ($_REQUEST['do'] == 'phpinfo')
-{
-	if (is_demo_mode())
-	{
-		print_cp_message('This function is disabled within demo mode');
-	}
-	else
-	{
-		phpinfo();
-		exit;
-	}
-}
-
-// ################################ HANDLE ADMIN MESSAGES #############################
-if ($_POST['do'] == 'handlemessage')
-{
-	$vbulletin->input->clean_array_gpc('p', array(
-		'address' => TYPE_ARRAY_KEYS_INT,
-		'dismiss' => TYPE_ARRAY_KEYS_INT
-	));
-
-	print_cp_header($vbphrase['welcome_to_the_vbulletin_admin_control_panel']);
-
-	if ($vbulletin->GPC['address'])
-	{
-		// chosen to address the issue -- redirect to the appropriate page
-		$adminmessageid = intval($vbulletin->GPC['address'][0]);
-		$adminmessage = $db->query_first("
-			SELECT * FROM " . TABLE_PREFIX . "adminmessage
-			WHERE adminmessageid = $adminmessageid
-		");
-
-		if (!empty($adminmessage))
-		{
-			// set the issue as addressed
+			/*insert query*/
 			$db->query_write("
-				UPDATE " . TABLE_PREFIX . "adminmessage
-				SET status = 'done', statususerid = " . $vbulletin->userinfo['userid'] . "
-				WHERE adminmessageid = $adminmessageid
+				INSERT INTO " . TABLE_PREFIX . "session
+					(sessionhash, userid, host, idhash, lastactivity, styleid, loggedin, bypass, useragent)
+				VALUES
+					('" . $db->escape_string($vbulletin->session->vars['sessionhash']) . "', " . $vbulletin->session->vars['userid'] . ", '" . $db->escape_string($vbulletin->session->vars['host']) . "', '" . $db->escape_string($vbulletin->session->vars['idhash']) . "', " . TIMENOW . ", " . $vbulletin->session->vars['styleid'] . ", 1, " . iif ($logintype === 'cplogin', 1, 0) . ", '" . $db->escape_string($vbulletin->session->vars['useragent']) . "')
 			");
-		}
 
-		if (!empty($adminmessage) AND !empty($adminmessage['execurl']))
-		{
-			if ($adminmessage['method'] == 'get')
+			$redirect_url = $vbulletin->options['bburl'] . '/archive/index.php';
+			if ($querystring)
 			{
-				// get redirect -- can use the url basically as is
-				if (!strpos($adminmessage['execurl'], '?'))
-				{
-					$adminmessage['execurl'] .= '?';
-				}
-				print_cp_redirect($adminmessage['execurl'] . $vbulletin->session->vars['sessionurl_js']);
+				$redirect_url .= (SLASH_METHOD ? '/' : '?') . $querystring . ARCHIVE_SESSION_URL;
 			}
 			else
 			{
-				// post redirect -- need to seperate into <file>?<querystring> first
-				if (preg_match('#^(.+)\?(.*)$#siU', $adminmessage['execurl'], $match))
-				{
-					$script = $match[1];
-					$arguments = explode('&', $match[2]);
-				}
-				else
-				{
-					$script = $adminmessage['execurl'];
-					$arguments = array();
-				}
-
-				echo '
-					<form action="' . htmlspecialchars_uni($script) . '" method="post" id="postform">
-				';
-
-				foreach ($arguments AS $argument)
-				{
-					// now take each element in the query string into <name>=<value>
-					// and stuff it into hidden form elements
-					if (preg_match('#^(.*)=(.*)$#siU', $argument, $match))
-					{
-						$name = $match[1];
-						$value = $match[2];
-					}
-					else
-					{
-						$name = $argument;
-						$value = '';
-					}
-					echo '
-						<input type="hidden" name="' . htmlspecialchars_uni(urldecode($name)) . '" value="' . htmlspecialchars_uni(urldecode($value)) . '" />
-					';
-				}
-
-				// and submit the form automatically
-				echo '
-					</form>
-					<script type="text/javascript">
-					<!--
-					fetch_object(\'postform\').submit();
-					// -->
-					</script>
-				';
+				$redirect_url .= $vbulletin->session->vars['sessionurl_q'];
 			}
-
-			print_cp_footer();
+			exec_header_redirect($redirect_url);
+		}
+		else
+		{ // wrong username / password
+			exec_strike_user($vbulletin->userinfo['username']);
+			$error_message = fetch_error('badlogin', $vbulletin->options['bburl'], $vbulletin->session->vars['sessionurl'], $strikes);
+			$do = 'error';
 		}
 	}
-	else if ($vbulletin->GPC['dismiss'])
-	{
-		// choosing to forget about the issue
-		$adminmessageid = intval($vbulletin->GPC['dismiss'][0]);
-
-		$db->query_write("
-			UPDATE " . TABLE_PREFIX . "adminmessage
-			SET status = 'dismissed', statususerid = " . $vbulletin->userinfo['userid'] . "
-			WHERE adminmessageid = $adminmessageid
-		");
-	}
-	print_cp_redirect('index.php?do=home' . $vbulletin->session->vars['sessionurl_js']);
 }
+
+if ($do == 'error')
+{
+}
+else if ($t)
+{
+	$do = 'thread';
+
+	$threadinfo = fetch_threadinfo($t);
+	$foruminfo = fetch_foruminfo($threadinfo['forumid']);
+
+	$threadinfo['meta_description'] = strip_bbcode(strip_quotes($threadinfo['description']), false, true);
+	$threadinfo['meta_description'] = htmlspecialchars_uni(fetch_censored_text(fetch_trimmed_title($threadinfo['meta_description'], 500, false)));
+
+	$forumperms = $vbulletin->userinfo['forumpermissions'][$foruminfo['forumid']];
+	if (!($forumperms & $vbulletin->bf_ugp_forumpermissions['canview']) OR !($forumperms & $vbulletin->bf_ugp_forumpermissions['canviewthreads']) OR !($forumperms & $vbulletin->bf_ugp_forumpermissions['canviewothers']) OR in_coventry($threadinfo['postuserid']) OR $threadinfo['isdeleted'] OR (!$threadinfo['visible'] AND !can_moderate($threadinfo['forumid'], 'canmoderateposts')))
+	{
+		exit;
+	}
+
+	verify_forum_password($foruminfo['forumid'], $foruminfo['password']);
+
+	if (trim($foruminfo['link']) != '')
+	{
+		exec_header_redirect($foruminfo['link'], true);
+	}
+
+	$title = "$threadinfo[prefix_plain_html] $threadinfo[title] [$vbphrase[archive]] " . ($p > 1 ? ' - ' . construct_phrase($vbphrase['page_x'], $p) : '') . " - $title";
+
+	$p = intval($p);
+	$metatags = "<meta name=\"keywords\" content=\"$threadinfo[keywords]\" />
+	<meta name=\"description\" content=\"$threadinfo[meta_description]\" />
+	";
+
+}
+else if ($f)
+{
+	$do = 'forum';
+
+	$forumperms = $vbulletin->userinfo['forumpermissions'][$f];
+	if (!($forumperms & $vbulletin->bf_ugp_forumpermissions['canview']) OR !($forumperms & $vbulletin->bf_ugp_forumpermissions['canviewothers']))
+	{
+		exit;
+	}
+
+	$foruminfo = fetch_foruminfo($f, false);
+
+	if (trim($foruminfo['link']) != '')
+	{
+		// add session hash to local links if necessary
+		if (preg_match('#^([a-z0-9_]+\.php)(\?.*$)?#i', $foruminfo['link'], $match))
+		{
+			if ($match[2])
+			{
+				// we have a ?xyz part, put session url at beginning if necessary
+				$query_string = preg_replace('/([^a-z0-9])(s|sessionhash)=[a-z0-9]{32}(&amp;|&)?/', '\\1', $match[2]);
+				$foruminfo['link'] = $match[1] . '?' . $vbulletin->session->vars['sessionurl_js'] . substr($query_string, 1);
+			}
+			else
+			{
+				$foruminfo['link'] .= $vbulletin->session->vars['sessionurl_q'];
+			}
+		}
+		exec_header_redirect($foruminfo['link'], true);
+	}
+
+	verify_forum_password($foruminfo['forumid'], $foruminfo['password']);
+
+	$title = "$foruminfo[title_clean] [$vbphrase[archive]]" . ($p > 1 ? ' - ' . construct_phrase($vbphrase['page_x'], $p) : '') . " - $title";
+
+	$p = intval($p);
+	$metatags = "<meta name=\"keywords\" content=\"$foruminfo[title_clean], " . $vbulletin->options['keywords'] . "\" />
+	<meta name=\"description\" content=\"[$vbphrase[archive]] " . ($p > 1 ? construct_phrase($vbphrase['page_x'], $p) . " " : "") . $foruminfo['description_clean'] . "\" />
+	";
+
+}
+else
+{
+	$do = 'index';
+	$metatags = "<meta name=\"keywords\" content=\"" . $vbulletin->options['keywords'] . "\" />
+	<meta name=\"description\" content=\"" . $vbulletin->options['description'] . "\" />";
+}
+
+($hook = vBulletinHook::fetch_hook('archive_process_start')) ? eval($hook) : false;
+
+if ($pda AND $vbulletin->userinfo['userid'] == 0 AND $vbulletin->GPC['login'] AND $do != 'error')
+{
+	$do = 'login';
+}
+if ($pda AND $vbulletin->userinfo['userid'] > 0 AND $vbulletin->GPC['message'] AND false)
+{
+	$do = 'message';
+}
+
+// ad locations
+$ad_templates = fetch_ad_templates(array('ad_archive_above_content1', 'ad_archive_above_content2', 'ad_archive_below_content'));
+
+$output .= "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">
+<html xmlns=\"http://www.w3.org/1999/xhtml\" dir=\"" . vB_Template_Runtime::fetchStyleVar('textdirection') . "\" lang=\"" . vB_Template_Runtime::fetchStyleVar('languagecode') . "\">
+<head>
+	<meta http-equiv=\"Content-Type\" content=\"text/html; charset=" . vB_Template_Runtime::fetchStyleVar('charset') . "\" />
+	$metatags
+	<title>$title</title>
+	<link rel=\"stylesheet\" type=\"text/css\" href=\"" . $vbulletin->options['bburl'] . "/archive/archive.css\" />
+</head>
+<body>
+<div class=\"pagebody\">
+";
+
+($hook = vBulletinHook::fetch_hook('archive_postheader')) ? eval($hook) : false;
+
+// ********************************************************************************************
+// display board
+
+if ($do == 'index')
+{
+
+	$output .= print_archive_navigation(array());
+
+	$output .= "<p class=\"largefont\">$vbphrase[view_full_version]: <a href=\"" . 
+		fetch_seo_url('forumhome|bburl', array()) 
+		. '">' . $vbulletin->options['bbtitle'] . "</a></p>\n";
+	$output .= "<div class=\"floatcontainer\">";
+	$output .= $ad_templates['ad_archive_above_content1'];
+	$output .= $ad_templates['ad_archive_above_content2'];
+	$output .= "</div><br />";
+	$output .= "<div id=\"content\">\n";
+	$output .= print_archive_forum_list();
+	$output .= "</div>\n";
+
+}
+
+if ($Coventry = fetch_coventry('string'))
+{
+	$globalignore = "AND " . iif($do == 'forum', 'thread.post', 'post.') . "userid NOT IN ($Coventry) ";
+}
+else
+{
+	$globalignore = '';
+}
+
+// ********************************************************************************************
+// display forum
+
+if ($do == 'forum')
+{
+	// list threads
+
+	$output .= print_archive_navigation($foruminfo);
+
+	$output .= "<p class=\"largefont\">$vbphrase[view_full_version] : <a href=\"" .
+		fetch_seo_url('forum|bburl', $foruminfo) .
+		"\">$foruminfo[title_clean]</a></p>\n<hr />\n";
+
+	$output .= "<div class=\"floatcontainer\">";
+	$output .= $ad_templates['ad_archive_above_content1'];
+	$output .= $ad_templates['ad_archive_above_content2'];
+	$output .= "</div><br />";
+
+	if ($foruminfo['cancontainthreads'])
+	{
+
+		if (!$p)
+		{
+			$p = 1;
+		}
+
+		$output .= print_archive_page_navigation($foruminfo['threadcount'], $vbulletin->options['archive_threadsperpage'], "f-$foruminfo[forumid]");
+
+		$threads = $db->query_read_slave("
+			SELECT threadid, title, prefixid, lastpost, replycount
+			FROM " . TABLE_PREFIX . "thread AS thread
+			WHERE forumid = $foruminfo[forumid]
+				AND visible = 1
+				AND open <> 10
+				$globalignore
+			ORDER BY dateline " . iif($pda, 'DESC', 'ASC') . "
+			LIMIT " . ($p - 1) * $vbulletin->options['archive_threadsperpage'] . ',' . $vbulletin->options['archive_threadsperpage']
+		);
+
+		$start = ($p - 1) * $vbulletin->options['archive_threadsperpage'] + 1;
+		if ($pda AND false)
+		{
+			$output .= "<span id=\"posting\"><a href=\"?message=1\" rel=\"nofollow\">New Thread</a></span>";
+		}
+		$output .= "<div id=\"content\">\n<ol start=\"$start\">\n";
+		while ($thread = $db->fetch_array($threads))
+		{
+			if ($vbulletin->options['wordwrap'] != 0)
+			{
+				$thread['title'] = fetch_word_wrapped_string($thread['title']);
+			}
+
+			$thread['title'] = fetch_censored_text($thread['title']);
+			$thread['prefix_plain_html'] = ($thread['prefixid'] ? htmlspecialchars_uni($vbphrase["prefix_$thread[prefixid]_title_plain"]) : '');
+
+			($hook = vBulletinHook::fetch_hook('archive_forum_thread')) ? eval($hook) : false;
+
+			if (!($forumperms & $vbulletin->bf_ugp_forumpermissions['canviewthreads']))
+			{
+				$output .= "\t<li>$thread[prefix_plain_html] $thread[title]" . iif($pda, " <i>(" . construct_phrase($vbphrase['x_replies'], $thread['replycount']) . ")</i>") . "</li>\n";
+			}
+			else if ($vbulletin->options['archive_threadtype'] OR $pda)
+			{
+				$output .= "\t<li>$thread[prefix_plain_html] <a href=\"" . $vbulletin->options['bburl'] .
+					'/archive/index.php' . (SLASH_METHOD ? '/' : '?') . "t-$thread[threadid].html" . ARCHIVE_SESSION_URL . "\">$thread[title]</a>" . iif($pda, " <i>(" . construct_phrase($vbphrase['x_replies'], $thread['replycount']) . ")</i>") . "</li>\n";
+			}
+			else
+			{
+				$output .= "\t<li>$thread[prefix_plain_html] <a href=\"" . fetch_seo_url('thread|bburl', $thread) . 
+					"\">$thread[title]</a></li>\n";
+			}
+		}
+		$output .= "</ol>\n</div>\n";
+
+	}
+	else
+	{
+		$output .= "<div id=\"content\">\n";
+		$output .= print_archive_forum_list($f);
+		$output .= "</div>\n";
+	}
+}
+
+// ********************************************************************************************
+// display thread
+
+if ($do == 'thread')
+{
+	if (!$vbulletin->options['archive_threadtype'])
+	{
+		// if we are not using the archive threadtype, invisibly redirect to the full thread view
+		exec_header_redirect(fetch_seo_url('thread|js|bburl', $threadinfo));
+	}
+
+	if ($vbulletin->options['wordwrap'] != 0)
+	{
+		$threadinfo['title'] = fetch_word_wrapped_string($threadinfo['title']);
+	}
+
+	$threadinfo['title'] = fetch_censored_text($threadinfo['title']);
+
+	$output .= print_archive_navigation($foruminfo, $threadinfo);
+
+	$output .= "<p class=\"largefont\">$vbphrase[view_full_version] : "
+		. ($threadinfo['prefix_plain_html'] ? "$threadinfo[prefix_plain_html] " : '' )
+		. "<a href=\"" . fetch_seo_url('thread|bburl', $threadinfo)
+		. "\">$threadinfo[title]</a></p>\n<hr />\n";
+
+	if ($p == 0)
+	{
+		$p = 1;
+	}
+
+	$output .= "<div class=\"floatcontainer\">";
+	$output .= $ad_templates['ad_archive_above_content1'];
+	$output .= $ad_templates['ad_archive_above_content2'];
+	$output .= "</div><br />";
+
+	$output .= print_archive_page_navigation($threadinfo['replycount'] + 1, $vbulletin->options['archive_postsperpage'], "t-$threadinfo[threadid]");
+
+	$posts = $db->query_read_slave("
+		SELECT post.postid, post.pagetext, IFNULL( user.username , post.username ) AS username, dateline
+		FROM " . TABLE_PREFIX . "post AS post
+		LEFT JOIN " . TABLE_PREFIX . "user AS user ON (user.userid = post.userid)
+		WHERE threadid = $threadinfo[threadid]
+			AND visible = 1
+			$globalignore
+		ORDER BY dateline ASC
+		LIMIT " . (($p - 1) * $vbulletin->options['archive_postsperpage']) . ',' . $vbulletin->options[archive_postsperpage]
+	);
+	if ($pda AND false)
+	{
+		$output .= "<span id=\"posting\"><a href=\"?message=1\" rel=\"nofollow\">New Reply</a></span>";
+	}
+	$i = 0;
+	while ($post = $db->fetch_array($posts))
+	{
+		$i++;
+		$post['pagetext_simp'] = strip_bbcode($post['pagetext']);
+		$post['postdate'] = vbdate($vbulletin->options['dateformat'], $post['dateline']);
+		$post['posttime'] = vbdate($vbulletin->options['timeformat'], $post['dateline']);
+
+		if ($vbulletin->options['wordwrap'] != 0)
+		{
+			$post['pagetext_simp'] = fetch_word_wrapped_string($post['pagetext_simp']);
+		}
+
+		$post['pagetext_simp'] = fetch_censored_text($post['pagetext_simp']);
+
+		($hook = vBulletinHook::fetch_hook('archive_thread_post')) ? eval($hook) : false;
+
+		$output .= "\n<div class=\"post\"><div class=\"posttop\"><div class=\"username\">$post[username]</div><div class=\"date\">$post[postdate], $post[posttime]</div></div>";
+		$output .= "<div class=\"posttext\">" . nl2br(htmlspecialchars_uni($post['pagetext_simp'])) . "</div></div><hr />\n\n";
+	}
+
+	// Record thread as viewed.
+	if ($vbulletin->options['who_read'])
+	{
+		mark_content_read('vBForum_Thread', $thread['threadid'], 'view');
+	}
+}
+
+// ********************************************************************************************
+// display login
+if ($do == 'login')
+{
+	$output .= print_archive_navigation(array());
+	$output .= "<p class=\"largefont\">$vbphrase[view_full_version]: <a href=\"" . 
+		fetch_seo_url('forumhome|bburl', array()) .
+		'">' . $vbulletin->options['bbtitle'] . "</a></p>\n";
+
+	$output .= "<div class=\"floatcontainer\">";
+	$output .= $ad_templates['ad_archive_above_content1'];
+	$output .= $ad_templates['ad_archive_above_content2'];
+	$output .= "</div><br />";
+
+	if (SLASH_METHOD)
+	{
+		$loginlink = 'index.php' . (!empty($querystring) ? "/$querystring" : '') . '?' . $vbulletin->session->vars['sessionurl'] . 'login=1';
+	}
+	else
+	{
+		$loginlink = 'index.php?' . (!empty($querystring) ? "$querystring&amp;" : '') . $vbulletin->session->vars['sessionurl'] . 'login=1';
+	}
+
+	$output .= "<div id=\"content\">\n";
+	$output .= "<strong>$vbphrase[log_in]</strong>\n";
+	$output .= "<form action=\"" . $vbulletin->options['bburl'] . "/archive/$loginlink\" method=\"post\">\n";
+	$output .= "$vbphrase[username]: <input type=\"text\" name=\"username\" size=\"15\" />\n";
+	$output .= "$vbphrase[password]: <input type=\"password\" name=\"password\" size=\"15\" />\n";
+	$output .= "<input type=\"submit\" name=\"sbutton\" value=\"$vbphrase[log_in]\" />\n";
+	$output .= "</form>\n";
+	$output .= "</div>\n";
+}
+
+// ********************************************************************************************
+// display error
+if ($do == 'error')
+{
+	$output .= print_archive_navigation(array());
+
+	$output .= "<p class=\"largefont\">$vbphrase[view_full_version]: <a href=\"" . 
+		fetch_seo_url('forumhome|bburl', array()) .
+		'">' . $vbulletin->options['bbtitle'] . "</a></p>\n";
+
+	$output .= "<div class=\"floatcontainer\">";
+	$output .= $ad_templates['ad_archive_above_content1'];
+	$output .= $ad_templates['ad_archive_above_content2'];
+	$output .= "</div><br />";
+
+	$output .= "<div id=\"content\">\n";
+	$output .= $error_message;
+	$output .= "</div>\n";
+}
+
+// ad locations
+
+($hook = vBulletinHook::fetch_hook('archive_complete')) ? eval($hook) : false;
+
+$output .= $ad_templates['ad_archive_below_content'];
+$output .= "
+<div id=\"copyright\">$vbphrase[vbulletin_copyright]</div>
+</div>
+</body>
+</html>";
+
+$vbulletin->shutdown->shutdown();
+if (defined('NOSHUTDOWNFUNC'))
+{
+	exec_shut_down();
+}
+
+echo $output;
+
+($hook = vBulletinHook::fetch_hook('archive_complete_postoutput')) ? eval($hook) : false;
 
 /*======================================================================*\
 || ####################################################################
-|| # $Revision: 92648 $
-|| # $Date: 2017-01-26 16:41:56 -0800 (Thu, 26 Jan 2017) $
+|| # $Revision: 92140 $
+|| # NulleD By - vBSupport.org
 || ####################################################################
 \*======================================================================*/
 ?>
